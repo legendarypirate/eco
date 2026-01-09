@@ -17,5 +17,7 @@ const config: Config = {
     },
   },
   plugins: [],
+  // Ensure CSS is not purged in production
+  important: false,
 }
 export default config
