@@ -461,7 +461,7 @@ const WishlistPage = () => {
                       alt={item.product.nameMn}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       onError={(e) => {
-                        e.currentTarget.src = 'https://via.placeholder.com/400';
+                        e.currentTarget.src = '/placeholder.jpg';
                       }}
                     />
                   </div>

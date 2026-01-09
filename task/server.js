@@ -4,14 +4,25 @@ const path = require("path");
 
 const app = express();
 
-// CORS configuration to allow only a specific origin
-var corsOptions = {
-  origin: "http://localhost:3000"
+// Allowed origins
+const allowedOrigins = ["http://localhost:3000", "http://localhost:3002"];
+
+// CORS configuration
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true); // allow this origin
+    } else {
+      callback(new Error("Not allowed by CORS")); // block this origin
+    }
+  }
 };
 
 // Enable CORS
 app.use(cors(corsOptions));
-
 // parse requests of content-type - application/json
 app.use(express.json());
 

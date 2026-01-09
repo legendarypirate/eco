@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -82,7 +82,7 @@ interface CategoriesResponse {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
-const ProductListPage = () => {
+const ProductListPageContent = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
   const categoryId = searchParams.get('category') || 'all';
@@ -105,11 +105,39 @@ const ProductListPage = () => {
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const [brands, setBrands] = useState<string[]>([]);
   const [priceStats, setPriceStats] = useState<{ min: number; max: number }>({ min: 0, max: 5000000 });
+  const [isInitialLoad, setIsInitialLoad] = useState<boolean>(true);
+  const [priceRangeInitialized, setPriceRangeInitialized] = useState<boolean>(false);
 
+  // Sync selectedCategory with URL params when URL changes
+  useEffect(() => {
+    const urlCategory = searchParams.get('category') || 'all';
+    if (urlCategory !== selectedCategory) {
+      setSelectedCategory(urlCategory);
+    }
+  }, [searchParams, selectedCategory]);
+
+  // Fetch categories only once on mount
   useEffect(() => {
     fetchCategories();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Fetch products when filters change (but wait for categories to load first)
+  useEffect(() => {
+    // Don't fetch if categories haven't loaded yet (unless it's a category change)
+    if (categories.length === 0 && selectedCategory !== 'all') {
+      return;
+    }
+    
+    // On initial load, wait for price range to be initialized only if no category is selected
+    // If a category is selected from URL, allow fetching immediately
+    if (isInitialLoad && !priceRangeInitialized && selectedCategory === 'all') {
+      return;
+    }
+    
     fetchProducts();
-  }, [selectedCategory, priceRange, selectedBrands, sortBy]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCategory, priceRange, selectedBrands, sortBy, categories.length]);
 
   useEffect(() => {
     let count = 0;
@@ -229,9 +257,26 @@ const ProductListPage = () => {
       setHasMore(data.page < data.totalPages);
       
       if (data.minPrice !== undefined && data.maxPrice !== undefined) {
-        setPriceStats({ min: data.minPrice, max: data.maxPrice });
-        if (reset && priceRange[0] === 0 && priceRange[1] === 5000000) {
-          setPriceRange([data.minPrice, data.maxPrice]);
+        const newPriceStats = { min: data.minPrice, max: data.maxPrice };
+        // Only update if values actually changed to prevent unnecessary re-renders
+        setPriceStats(prev => {
+          if (prev.min === newPriceStats.min && prev.max === newPriceStats.max) {
+            return prev;
+          }
+          return newPriceStats;
+        });
+        
+        // Only update priceRange on initial load if it's still at default values
+        if (reset && !priceRangeInitialized && priceRange[0] === 0 && priceRange[1] === 5000000) {
+          // Mark as initialized first to prevent useEffect from running
+          setPriceRangeInitialized(true);
+          setIsInitialLoad(false);
+          // Only update if the new range is different from current
+          if (data.minPrice !== priceRange[0] || data.maxPrice !== priceRange[1]) {
+            setPriceRange([data.minPrice, data.maxPrice]);
+          }
+        } else if (isInitialLoad) {
+          setIsInitialLoad(false);
         }
       }
       
@@ -889,4 +934,26 @@ const ProductListPage = () => {
   );
 };
 
-export default ProductListPage;
+// Mark page as dynamic since it uses useSearchParams
+export const dynamic = 'force-dynamic';
+
+export default function ProductListPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="container mx-auto px-3 sm:px-4 py-6 pt-6">
+          <div className="flex items-center justify-center h-96">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-4 text-gray-600 text-sm">Бүтээгдэхүүний мэдээлэл уншиж байна...</p>
+            </div>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    }>
+      <ProductListPageContent />
+    </Suspense>
+  );
+}

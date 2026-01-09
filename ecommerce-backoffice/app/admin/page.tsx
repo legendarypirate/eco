@@ -15,6 +15,16 @@ import {
   CheckCircle,
   XCircle
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+
+type OrderStatus = 'delivered' | 'processing' | 'shipped' | 'pending';
+
+const statusConfig: Record<OrderStatus, { label: string; color: string; icon: LucideIcon }> = {
+  delivered: { label: 'Хүргэгдсэн', color: 'bg-green-100 text-green-800', icon: CheckCircle },
+  processing: { label: 'Боловсруулж байна', color: 'bg-blue-100 text-blue-800', icon: Clock },
+  shipped: { label: 'Хүргэлтэнд гарсан', color: 'bg-purple-100 text-purple-800', icon: Package },
+  pending: { label: 'Хүлээгдэж байна', color: 'bg-yellow-100 text-yellow-800', icon: AlertCircle },
+};
 
 // Sample data
 const dashboardData = {
@@ -27,10 +37,10 @@ const dashboardData = {
     pendingOrders: 8
   },
   recentOrders: [
-    { id: 'ORD-1001', customer: 'Бат', amount: 150000, status: 'delivered', date: '2024-01-15' },
-    { id: 'ORD-1002', customer: 'Сараа', amount: 75000, status: 'processing', date: '2024-01-15' },
-    { id: 'ORD-1003', customer: 'Төгс', amount: 420000, status: 'shipped', date: '2024-01-14' },
-    { id: 'ORD-1004', customer: 'Болд', amount: 89000, status: 'pending', date: '2024-01-14' },
+    { id: 'ORD-1001', customer: 'Бат', amount: 150000, status: 'delivered' as OrderStatus, date: '2024-01-15' },
+    { id: 'ORD-1002', customer: 'Сараа', amount: 75000, status: 'processing' as OrderStatus, date: '2024-01-15' },
+    { id: 'ORD-1003', customer: 'Төгс', amount: 420000, status: 'shipped' as OrderStatus, date: '2024-01-14' },
+    { id: 'ORD-1004', customer: 'Болд', amount: 89000, status: 'pending' as OrderStatus, date: '2024-01-14' },
   ],
   topProducts: [
     { name: 'iPhone 15 Pro', sales: 45, revenue: 67500000 },
@@ -44,13 +54,6 @@ const dashboardData = {
     { action: 'Төлбөр төлсөн', user: 'Сараа', time: '12 мин' },
     { action: 'Бараа нэмсэн', user: 'Admin', time: '25 мин' },
   ]
-};
-
-const statusConfig = {
-  delivered: { label: 'Хүргэгдсэн', color: 'bg-green-100 text-green-800', icon: CheckCircle },
-  processing: { label: 'Боловсруулж байна', color: 'bg-blue-100 text-blue-800', icon: Clock },
-  shipped: { label: 'Хүргэлтэнд гарсан', color: 'bg-purple-100 text-purple-800', icon: Package },
-  pending: { label: 'Хүлээгдэж байна', color: 'bg-yellow-100 text-yellow-800', icon: AlertCircle },
 };
 
 export default function AdminHome() {

@@ -1017,7 +1017,7 @@ const CheckoutPage = () => {
                             alt={item.product.name}
                             className="w-full h-full object-cover"
                             onError={(e) => {
-                              e.currentTarget.src = 'https://via.placeholder.com/100';
+                              e.currentTarget.src = '/placeholder.jpg';
                             }}
                           />
                         ) : (

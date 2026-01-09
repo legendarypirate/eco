@@ -350,7 +350,7 @@ useEffect(() => {
                         alt={item.product.nameMn}
                         className="w-full h-full object-cover rounded-lg"
                         onError={(e) => {
-                          e.currentTarget.src = 'https://via.placeholder.com/100';
+                          e.currentTarget.src = '/placeholder.jpg';
                         }}
                       />
                     </div>
