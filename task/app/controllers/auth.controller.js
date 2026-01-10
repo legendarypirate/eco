@@ -193,8 +193,11 @@ exports.login = async (req, res) => {
     const token = generateToken(user);
     const refreshToken = generateRefreshToken(user);
     
-    // Save refresh token
-    await user.update({ refresh_token: refreshToken });
+    // Save refresh token without triggering full reload
+    await user.update({ refresh_token: refreshToken }, {
+      fields: ['refresh_token'],
+      returning: false
+    });
 
     const userResponse = prepareUserResponse(user);
 
@@ -230,7 +233,9 @@ exports.googleAuth = (req, res) => {
     
     res.json({
       success: true,
-      auth_url: authUrl,
+      data: {
+        auth_url: authUrl
+      },
       message: 'Google нэвтрэх холбоос'
     });
     
@@ -246,32 +251,34 @@ exports.googleAuth = (req, res) => {
 // Handle Google OAuth Callback
 exports.googleCallback = async (req, res) => {
   try {
-    const { code } = req.query;
+    const { code, error } = req.query;
     
-    if (!code) {
-      // Get frontend origin from environment or default to localhost:3000
-      const frontendOrigin = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const redirectUrl = `${frontendUrl}/auth/callback`;
+    
+    // Check for error parameter first (when user cancels authentication)
+    if (error) {
+      let errorMessage = 'Google нэвтрэх цуцлагдсан';
       
-      return res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Authentication Error</title>
-          <script>
-            if (window.opener) {
-              window.opener.postMessage({
-                type: 'google_auth_error',
-                message: 'Баталгаажуулах код шаардлагатай'
-              }, '${frontendOrigin}');
-            }
-            setTimeout(() => window.close(), 1000);
-          </script>
-        </head>
-        <body>
-          <p>Алдаа: Баталгаажуулах код шаардлагатай</p>
-        </body>
-        </html>
-      `);
+      if (error === 'access_denied') {
+        errorMessage = 'Та Google нэвтрэхийг цуцласан байна';
+      } else if (error === 'invalid_request') {
+        errorMessage = 'Хүчингүй хүсэлт';
+      }
+      
+      // Create URL with error in fragment/hash
+      const url = new URL(redirectUrl);
+      url.hash = `#error=${encodeURIComponent(errorMessage)}`;
+      
+      return res.redirect(url.toString());
+    }
+    
+    // Check if code is missing
+    if (!code) {
+      const url = new URL(redirectUrl);
+      url.hash = `#error=${encodeURIComponent('Баталгаажуулах код шаардлагатай')}`;
+      
+      return res.redirect(url.toString());
     }
     
     // Exchange authorization code for tokens
@@ -333,148 +340,23 @@ exports.googleCallback = async (req, res) => {
     const token = generateToken(user);
     const refreshToken = generateRefreshToken(user);
     
-    // Save refresh token
-    await user.update({ refresh_token: refreshToken });
+    // Save refresh token without triggering full reload
+    await user.update({ refresh_token: refreshToken }, {
+      fields: ['refresh_token'],
+      returning: false
+    });
     
     // Prepare user response
     const userResponse = prepareUserResponse(user);
     
-    // Get frontend origin from environment or default to localhost:3000
-    const frontendOrigin = process.env.FRONTEND_URL || 'http://localhost:3000';
+    // Create URL with token in fragment/hash
+    const url = new URL(redirectUrl);
+    url.hash = `#token=${encodeURIComponent(token)}` +
+               `&refresh_token=${encodeURIComponent(refreshToken)}` +
+               `&user=${encodeURIComponent(JSON.stringify(userResponse))}`;
     
-    // Escape special characters for HTML/JavaScript
-    const safeToken = token.replace(/'/g, "\\'").replace(/"/g, '\\"');
-    const safeRefreshToken = refreshToken.replace(/'/g, "\\'").replace(/"/g, '\\"');
-    const safeUserResponse = JSON.stringify(userResponse)
-      .replace(/'/g, "\\'")
-      .replace(/"/g, '\\"')
-      .replace(/</g, '\\u003c')
-      .replace(/>/g, '\\u003e');
-    
-    // Return HTML page that closes the popup and sends data to parent
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Google Authentication</title>
-        <style>
-          body {
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-          .container {
-            background: white;
-            padding: 40px;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            text-align: center;
-            max-width: 400px;
-            width: 90%;
-            animation: fadeIn 0.5s ease-in-out;
-          }
-          .checkmark {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 20px;
-            animation: scaleIn 0.5s ease-in-out;
-          }
-          .checkmark svg {
-            width: 30px;
-            height: 30px;
-            color: white;
-          }
-          h1 {
-            color: #333;
-            margin-bottom: 10px;
-            font-weight: 600;
-          }
-          p {
-            color: #666;
-            margin-bottom: 30px;
-            line-height: 1.5;
-          }
-          .loader {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto;
-          }
-          @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-          @keyframes scaleIn {
-            from { transform: scale(0); }
-            to { transform: scale(1); }
-          }
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="checkmark">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M20 6L9 17L4 12" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
-          <h1>Амжилттай нэвтэрлээ!</h1>
-          <p>Та Google хаягаар амжилттай нэвтэрлээ. Энэ цонх автоматаар хаагдах болно.</p>
-          <div class="loader"></div>
-        </div>
-        <script>
-          // Send data to parent window
-          try {
-            const data = {
-              success: true,
-              message: 'Google хаягаар амжилттай нэвтэрлээ',
-              token: '${safeToken}',
-              refresh_token: '${safeRefreshToken}',
-              user: ${JSON.stringify(userResponse)}
-            };
-            
-            // Send message to parent window with correct frontend origin
-            if (window.opener) {
-              window.opener.postMessage({
-                type: 'google_auth_success',
-                ...data
-              }, '${frontendOrigin}');
-              
-              console.log('✅ Auth data sent to parent window at ${frontendOrigin}');
-            }
-            
-          } catch (error) {
-            console.error('Error sending auth data:', error);
-          }
-          
-          // Close window after 1.5 seconds
-          setTimeout(() => {
-            window.close();
-          }, 1500);
-        </script>
-      </body>
-      </html>
-    `;
-    
-    res.send(html);
+    // Redirect to frontend
+    return res.redirect(url.toString());
     
   } catch (error) {
     console.error('Google callback error:', error);
@@ -485,118 +367,11 @@ exports.googleCallback = async (req, res) => {
       errorMessage = 'Баталгаажуулах код хугацаа нь дууссан';
     }
     
-    // Escape error message for JavaScript
-    const safeErrorMessage = errorMessage
-      .replace(/\\/g, '\\\\')
-      .replace(/'/g, "\\'")
-      .replace(/"/g, '\\"')
-      .replace(/\n/g, '\\n');
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const errorRedirectUrl = `${frontendUrl}/auth/callback` +
+      `#error=${encodeURIComponent(errorMessage)}`;
     
-    // Get frontend origin
-    const frontendOrigin = process.env.FRONTEND_URL || 'http://localhost:3000';
-    
-    // Return error HTML page
-    const errorHtml = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Authentication Error</title>
-        <style>
-          body {
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #f56565 0%, #ed64a6 100%);
-            height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-          .container {
-            background: white;
-            padding: 40px;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            text-align: center;
-            max-width: 400px;
-            width: 90%;
-          }
-          .error-icon {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: #f56565;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 20px;
-          }
-          .error-icon svg {
-            width: 30px;
-            height: 30px;
-            color: white;
-          }
-          h1 {
-            color: #333;
-            margin-bottom: 10px;
-          }
-          p {
-            color: #666;
-            margin-bottom: 20px;
-          }
-          button {
-            background: #f56565;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: background 0.3s;
-          }
-          button:hover {
-            background: #e53e3e;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="error-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
-          <h1>Алдаа гарлаа</h1>
-          <p>${errorMessage}</p>
-          <button onclick="window.close()">Хаах</button>
-        </div>
-        <script>
-          // Send error to parent window
-          try {
-            const frontendOrigin = '${frontendOrigin}';
-            
-            if (window.opener) {
-              window.opener.postMessage({
-                type: 'google_auth_error',
-                message: '${safeErrorMessage}'
-              }, frontendOrigin);
-            }
-            
-            // Auto-close after 3 seconds
-            setTimeout(() => {
-              window.close();
-            }, 3000);
-          } catch (error) {
-            console.error('Error sending error message:', error);
-          }
-        </script>
-      </body>
-      </html>
-    `;
-    
-    res.send(errorHtml);
+    return res.redirect(errorRedirectUrl);
   }
 };
 // ==================== FACEBOOK OAUTH ====================
@@ -651,7 +426,16 @@ exports.facebookAuth = async (req, res) => {
     const token = generateToken(user);
     const refreshToken = generateRefreshToken(user);
     
-    await user.update({ refresh_token: refreshToken });
+    // Update refresh token without triggering a full reload
+    await user.update({ refresh_token: refreshToken }, {
+      fields: ['refresh_token'],
+      returning: false
+    });
+    
+    // Reload user with explicit attributes to avoid selecting non-existent columns
+    await user.reload({
+      attributes: ['id', 'email', 'full_name', 'first_name', 'last_name', 'avatar', 'google_id', 'provider', 'is_verified', 'is_active', 'role', 'phone', 'facebook_id', 'supervisor_id', 'created_at', 'updated_at']
+    });
     
     const userResponse = prepareUserResponse(user);
     
@@ -731,8 +515,11 @@ exports.refreshToken = async (req, res) => {
     const newToken = generateToken(user);
     const newRefreshToken = generateRefreshToken(user);
     
-    // Update refresh token in database
-    await user.update({ refresh_token: newRefreshToken });
+    // Update refresh token in database without triggering full reload
+    await user.update({ refresh_token: newRefreshToken }, {
+      fields: ['refresh_token'],
+      returning: false
+    });
     
     const userResponse = prepareUserResponse(user);
     

@@ -15,6 +15,34 @@ import { useAuth } from '../context/AuthContext';
 import { useRouter } from 'next/navigation';
 import ProtectedRoute from '../components/ProtectedRoute';
 
+// Component for mobile payment app link with logo
+const PaymentAppLink = ({ url, index }: { url: any; index: number }) => {
+  const [logoError, setLogoError] = useState(false);
+  
+  return (
+    <a
+      href={url.link}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex flex-col items-center gap-2 p-3 bg-white border border-gray-200 rounded-lg hover:border-gray-900 hover:shadow-md transition-all"
+    >
+      {url.logo && !logoError ? (
+        <img 
+          src={url.logo} 
+          alt={url.name || url.description || 'Payment app'}
+          className="w-12 h-12 object-contain rounded-lg"
+          onError={() => setLogoError(true)}
+        />
+      ) : (
+        <Smartphone className="w-8 h-8 text-gray-400" />
+      )}
+      <span className="text-xs text-center text-gray-700 font-medium leading-tight">
+        {url.name || url.description || 'App'}
+      </span>
+    </a>
+  );
+};
+
 const CheckoutPage = () => {
   const router = useRouter();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -77,7 +105,9 @@ const CheckoutPage = () => {
 
   // Calculate totals
   const subtotal = cartItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-  const shipping = subtotal > 100000 ? 0 : 5000;
+  const shipping = formData.deliveryMethod === 'pickup' 
+    ? 0 
+    : (subtotal > 100000 ? 0 : 5000);
   const total = subtotal + shipping;
 
   const formatPrice = (price: number) => {
@@ -125,98 +155,35 @@ const CheckoutPage = () => {
       if (isAuthenticated) {
         // You can save the shipping info to user's profile here
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-        await fetch(`${API_URL}/users/shipping-info`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
-          body: JSON.stringify(formData),
-        });
+        try {
+          await fetch(`${API_URL}/users/shipping-info`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            },
+            body: JSON.stringify(formData),
+          });
+        } catch (shippingError) {
+          console.error('Failed to save shipping info:', shippingError);
+          // Continue anyway since this is not critical
+        }
       }
 
       setStep(2);
-      createQPayInvoice();
+      // Create order first, then create QPay invoice
+      await createOrderAndQPayInvoice();
     } catch (error) {
-      console.error('Failed to save shipping info:', error);
-      // Continue anyway since this is not critical
-      setStep(2);
-      createQPayInvoice();
+      console.error('Failed to proceed to payment:', error);
+      alert('Төлбөрийн системд алдаа гарлаа. Дахин оролдоно уу.');
     }
   };
 
-  // Mock QPay service - replace with actual implementation
-  const createQPayInvoice = async () => {
+  // Create order and QPay invoice
+  const createOrderAndQPayInvoice = async () => {
     try {
       setIsProcessing(true);
       
-      // Generate unique invoice number
-      const invoiceNo = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const randomInvoiceId = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-      
-      // Generate random QR text for demo
-      const randomQrText = `QPAY:${randomInvoiceId}:${total}:${Math.random().toString(36).substr(2, 9)}`;
-      
-      // Immediately generate QR code (no delay)
-      const mockResponse = {
-        invoice_id: randomInvoiceId,
-        qr_text: randomQrText,
-        qr_code: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(randomQrText)}`,
-        urls: [
-          { name: 'QPay App', link: 'https://qpay.mn/app' },
-          { name: 'Khan Bank', link: 'https://khanbank.mn' },
-          { name: 'Golomt Bank', link: 'https://golomtbank.com' },
-        ]
-      };
-      
-      setInvoiceId(mockResponse.invoice_id);
-      setQrText(mockResponse.qr_text);
-      setQrCode(mockResponse.qr_code);
-      setPaymentUrls(mockResponse.urls);
-      
-      // Stop processing to show QR code
-      setIsProcessing(false);
-      
-      // Start checking payment status (mock) - will auto-complete after 3 seconds
-      startPaymentCheck(mockResponse.invoice_id);
-      
-    } catch (error) {
-      console.error('QPay invoice creation failed:', error);
-      alert('Төлбөрийн системд алдаа гарлаа. Дахин оролдоно уу.');
-      setIsProcessing(false);
-    }
-  };
-
-  const startPaymentCheck = (invoiceId: string) => {
-    // Clear existing interval
-    if (checkInterval) clearInterval(checkInterval);
-    
-    // Auto-complete payment after 3 seconds for demo (since we don't have QPay API yet)
-    setTimeout(() => {
-      setPaymentStatus('paid');
-      setIsProcessing(false);
-      
-      if (checkInterval) clearInterval(checkInterval);
-      
-      // Move to success step after 1 second
-      setTimeout(() => {
-        completeOrder();
-      }, 1000);
-    }, 3000); // 3 seconds delay to show QR code
-    
-    // Also set up interval check in case user wants to manually check
-    const interval = setInterval(async () => {
-      // For demo: always return paid after initial delay
-      if (paymentStatus === 'paid') {
-        clearInterval(interval);
-      }
-    }, 5000);
-    
-    setCheckInterval(interval);
-  };
-
-  const completeOrder = async () => {
-    try {
       // Map payment method to backend format: 0: QPay, 1: Cash, 2: Card, 3: SocialPay
       const paymentMethodMap: Record<string, number> = {
         'qpay': 0,
@@ -259,9 +226,10 @@ const CheckoutPage = () => {
         notes: formData.note || null,
       };
 
-      // Send order to API (correct endpoint: /api/order, not /api/orders)
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-      const response = await fetch(`${API_URL}/order`, {
+      
+      // Step 1: Create order
+      const orderResponse = await fetch(`${API_URL}/order`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -270,69 +238,161 @@ const CheckoutPage = () => {
         body: JSON.stringify(orderData),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-        console.error('Order creation failed:', errorData);
-        throw new Error(errorData.message || 'Failed to save order');
+      if (!orderResponse.ok) {
+        const errorData = await orderResponse.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(errorData.message || 'Failed to create order');
       }
 
-      const result = await response.json();
+      const orderResult = await orderResponse.json();
+      
+      if (!orderResult.success || !orderResult.order?.id) {
+        throw new Error('Failed to create order');
+      }
+
+      const createdOrder = orderResult.order;
       
       // Update order number with the one from backend
-      if (result.success && result.order?.order_number) {
-        setOrderNumber(result.order.order_number);
-      }
-      
-      // Update payment status to Paid (1) if order was created successfully
-      if (result.success && result.order?.id) {
-        try {
-          const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-          await fetch(`${API_URL}/order/${result.order.id}/payment`, {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(isAuthenticated && { 'Authorization': `Bearer ${localStorage.getItem('token')}` }),
-            },
-            body: JSON.stringify({ payment_status: 1 }), // 1 = Paid
-          });
-        } catch (paymentStatusError) {
-          console.error('Failed to update payment status:', paymentStatusError);
-          // Don't throw - order was created successfully
-        }
+      if (createdOrder.order_number) {
+        setOrderNumber(createdOrder.order_number);
       }
 
+      // Step 2: Create QPay invoice for the order
+      const invoiceResponse = await fetch(`${API_URL}/qpay/checkout/invoice`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(isAuthenticated && { 'Authorization': `Bearer ${localStorage.getItem('token')}` }),
+        },
+        body: JSON.stringify({
+          orderId: createdOrder.id,
+          amount: total,
+          description: `Захиалга - ${createdOrder.order_number}`
+        }),
+      });
+
+      if (!invoiceResponse.ok) {
+        const errorData = await invoiceResponse.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(errorData.message || 'Failed to create QPay invoice');
+      }
+
+      const invoiceResult = await invoiceResponse.json();
+      
+      if (!invoiceResult.success || !invoiceResult.invoice) {
+        throw new Error('Failed to create QPay invoice');
+      }
+
+      const invoice = invoiceResult.invoice;
+      const order = invoiceResult.order;
+      
+      // Set invoice data
+      setInvoiceId(invoice.invoice_id);
+      
+      // Get QR text from order or invoice
+      const qrTextValue = order?.qrText || invoice.qr_text || '';
+      setQrText(qrTextValue);
+      
+      // Handle QR code image - check order first, then invoice
+      // Check if it's base64 and format it properly
+      const qrImageValue = order?.qrImage || invoice.qr_image;
+      
+      if (qrImageValue) {
+        // Check if it's already a data URL
+        if (qrImageValue.startsWith('data:')) {
+          setQrCode(qrImageValue);
+        } else if (qrImageValue.startsWith('http://') || qrImageValue.startsWith('https://')) {
+          setQrCode(qrImageValue);
+        } else {
+          // Assume it's base64 and format it
+          setQrCode(`data:image/png;base64,${qrImageValue}`);
+        }
+      } else if (qrTextValue) {
+        setQrCode(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrTextValue)}`);
+      }
+      
+      // Set payment URLs from invoice response
+      if (invoice.urls && Array.isArray(invoice.urls)) {
+        setPaymentUrls(invoice.urls);
+      } else if (invoiceResult.invoice?.urls && Array.isArray(invoiceResult.invoice.urls)) {
+        setPaymentUrls(invoiceResult.invoice.urls);
+      } else {
+        // Fallback URLs
+        setPaymentUrls([
+          { name: 'QPay App', link: 'https://qpay.mn/app' },
+          { name: 'Khan Bank', link: 'https://khanbank.mn' },
+          { name: 'Golomt Bank', link: 'https://golomtbank.com' },
+        ]);
+      }
+      
+      // Stop processing to show QR code
+      setIsProcessing(false);
+      
+      // Start checking payment status
+      startPaymentCheck(invoice.invoice_id);
+      
+    } catch (error: any) {
+      console.error('QPay invoice creation failed:', error);
+      alert(`Төлбөрийн системд алдаа гарлаа: ${error?.message || 'Тодорхойгүй алдаа'}. Дахин оролдоно уу.`);
+      setIsProcessing(false);
+    }
+  };
+
+  const startPaymentCheck = (invoiceId: string) => {
+    // Clear existing interval
+    if (checkInterval) clearInterval(checkInterval);
+    
+    // Set up interval to check payment status every 5 seconds
+    const interval = setInterval(async () => {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+        const response = await fetch(`${API_URL}/qpay/check/${invoiceId}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(isAuthenticated && { 'Authorization': `Bearer ${localStorage.getItem('token')}` }),
+          },
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          
+          if (result.success && result.payment?.isPaid) {
+            setPaymentStatus('paid');
+            setIsProcessing(false);
+            clearInterval(interval);
+            setCheckInterval(null);
+            
+            // Move to success step after 1 second
+            setTimeout(() => {
+              completeOrder();
+            }, 1000);
+          }
+        }
+      } catch (error) {
+        console.error('Payment check error:', error);
+        // Continue checking on next interval
+      }
+    }, 5000); // Check every 5 seconds
+    
+    setCheckInterval(interval);
+  };
+
+  const completeOrder = async () => {
+    try {
+      // Order and invoice are already created, just clear cart and show success
+      // Payment status is already updated via the payment check
+      
       // Clear cart and move to success step
       clearCart();
       setStep(3);
       
     } catch (error: any) {
       console.error('Failed to complete order:', error);
-      const errorMessage = error?.message || 'Тодорхойгүй алдаа';
-      alert(`Захиалга хадгалахад алдаа гарлаа: ${errorMessage}. Гэхдээ төлбөр амжилттай төлөгдлөө. Манай байгууллагатай холбогдоно уу. Захиалгын дугаар: ${orderNumber}`);
       // Still clear cart and show success to prevent double payment
       clearCart();
       setStep(3);
     }
   };
 
-  const handleManualPaymentCheck = async () => {
-    if (!invoiceId) return;
-    
-    try {
-      // Mock payment check - for demo, always return paid
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      setPaymentStatus('paid');
-      setIsProcessing(false);
-      
-      if (checkInterval) clearInterval(checkInterval);
-      
-      completeOrder();
-    } catch (error) {
-      console.error('Manual payment check failed:', error);
-      alert('Төлбөрийн статус шалгахад алдаа гарлаа.');
-    }
-  };
 
   // Clean up interval on unmount
   useEffect(() => {
@@ -678,10 +738,26 @@ const CheckoutPage = () => {
             ) : (
               <>
                 <div className="mb-6">
+                  <p className="text-sm text-gray-600 mb-2">Төлбөрийн дүн: <span className="font-bold text-gray-900">{formatPrice(total)}</span></p>
                   <p className="text-sm text-gray-600 mb-4">Доорх QR кодыг QPay апп-аар уншуулна уу</p>
                   {qrCode && (
                     <div className="inline-block p-4 bg-white border border-gray-200 rounded-lg">
-                      <img src={qrCode} alt="QPay QR Code" className="w-48 h-48 mx-auto" />
+                      <img 
+                        src={qrCode} 
+                        alt="QPay QR Code" 
+                        className="w-48 h-48 mx-auto object-contain"
+                        onError={(e) => {
+                          console.error('QR image failed to load');
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  )}
+                  {!qrCode && (
+                    <div className="inline-block p-4 bg-gray-100 border border-gray-200 rounded-lg">
+                      <div className="w-48 h-48 flex items-center justify-center">
+                        <QrCode className="w-24 h-24 text-gray-400" />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -697,58 +773,40 @@ const CheckoutPage = () => {
                   )}
                 </div>
                 
-                {/* Mobile App Links */}
+                {/* Mobile App Links - Only show on mobile */}
                 {paymentUrls.length > 0 && (
-                  <div className="mb-6">
+                  <div className="mb-6 md:hidden">
                     <p className="text-sm text-gray-600 mb-3">Төлбөр төлөх:</p>
-                    <div className="flex flex-wrap gap-2 justify-center">
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                       {paymentUrls.map((url, index) => (
-                        <a
-                          key={index}
-                          href={url.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 text-sm font-medium"
-                        >
-                          <Smartphone className="w-4 h-4" />
-                          {url.name}
-                        </a>
+                        <PaymentAppLink key={index} url={url} index={index} />
                       ))}
                     </div>
                   </div>
                 )}
                 
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-                  <div className="flex items-start gap-3">
-                    <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-                    <div className="text-sm text-yellow-800">
-                      <p className="font-medium mb-1">Төлбөр төлсний дараа доорх товчийг дарна уу</p>
-                      <p>Төлбөр автоматаар шалгагдах боловч төлбөр төлөгдсөн эсэхийг шалгахыг хүсвэл доорх товчийг дарна уу.</p>
+                {/* Payment Status Indicator */}
+                {paymentStatus === 'paid' ? (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                    <div className="flex items-center gap-3">
+                      <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                      <div className="text-sm text-green-800">
+                        <p className="font-medium">Төлбөр амжилттай төлөгдлөө!</p>
+                        <p className="text-xs mt-1">Захиалга баталгаажуулж байна...</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-                
-                <button
-                  onClick={handleManualPaymentCheck}
-                  disabled={paymentStatus === 'paid'}
-                  className={`px-6 py-3 rounded-lg font-medium flex items-center gap-2 mx-auto transition-all ${
-                    paymentStatus === 'paid'
-                      ? 'bg-green-100 text-green-800 cursor-not-allowed'
-                      : 'bg-gray-900 text-white hover:bg-gray-800 active:scale-95'
-                  }`}
-                >
-                  {paymentStatus === 'paid' ? (
-                    <>
-                      <CheckCircle className="w-5 h-5" />
-                      Төлбөр төлөгдсөн
-                    </>
-                  ) : (
-                    <>
-                      <Clock className="w-5 h-5" />
-                      Төлбөрийг шалгах
-                    </>
-                  )}
-                </button>
+                ) : (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin flex-shrink-0"></div>
+                      <div className="text-sm text-blue-800">
+                        <p className="font-medium">Төлбөрийн статус автоматаар шалгаж байна...</p>
+                        <p className="text-xs mt-1">Төлбөр төлсний дараа автоматаар баталгаажуулах болно.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>

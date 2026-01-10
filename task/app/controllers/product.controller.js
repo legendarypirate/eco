@@ -607,12 +607,16 @@ exports.findOne = async (req, res) => {
     // Check if the association exists by checking if the model has the association
     // We'll try to include it, but catch the error if it fails
     try {
-      const hasColorOptionsAssociation = Product.associations && Product.associations.colorOptions;
+      // Check if association exists - use both possible names
+      const hasColorOptionsAssociation = Product.associations && 
+        (Product.associations.colorOptions || Product.associations.color_option);
       
       if (hasColorOptionsAssociation && db.color_options) {
+        // Use the actual association name that exists
+        const associationName = Product.associations.colorOptions ? 'colorOptions' : 'color_option';
         includeOptions.push({
           model: db.color_options, 
-          as: 'colorOptions',
+          as: associationName,
           attributes: ['id', 'name', 'nameMn', 'value', 'image'],
           required: false
         });

@@ -239,65 +239,57 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
  // app/context/AuthContext.tsx - Updated loginWithGoogle function
-const loginWithGoogle = async (): Promise<{ success: boolean; user?: User; token?: string }> => {
+ const loginWithGoogle = async (): Promise<{ success: boolean; user?: User; token?: string }> => {
   try {
     console.log('🔄 Starting Google OAuth...');
     
-    try {
-      // 1. Try to get Google auth URL from backend
-      const response = await apiService.getGoogleAuthUrl();
-      console.log('Backend response:', response);
+    // Always use your backend API to get the auth URL
+    const response = await apiService.getGoogleAuthUrl();
+    console.log('Backend response:', response);
+    
+    const authUrl = response.data?.auth_url || (response as any).auth_url;
+    
+    if (!response.success || !authUrl) {
+      throw new Error(response.message || 'Failed to get Google auth URL');
+    }
+    
+    console.log('✅ Google auth URL received:', authUrl);
+    
+    // Create a unique ID for this authentication session
+    const authSessionId = `google_auth_${Date.now()}`;
+    
+    // Open popup
+    const width = 500;
+    const height = 600;
+    const left = window.screen.width / 2 - width / 2;
+    const top = window.screen.height / 2 - height / 2;
+    
+    const popup = window.open(
+      authUrl,
+      authSessionId,
+      `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,resizable=yes`
+    );
+
+    if (!popup) {
+      throw new Error('Popup was blocked by the browser. Please allow popups for this site.');
+    }
+
+    return new Promise((resolve, reject) => {
+      let timeout: NodeJS.Timeout;
+      let pollInterval: NodeJS.Timeout;
       
-      if (response.success && response.data?.auth_url) {
-        console.log('✅ Google auth URL received');
-        
-        // 2. Open Google auth in popup
-        const width = 500;
-        const height = 600;
-        const left = window.screen.width / 2 - width / 2;
-        const top = window.screen.height / 2 - height / 2;
-        
-        const popup = window.open(
-          response.data.auth_url,
-          'google_auth',
-          `width=${width},height=${height},top=${top},left=${left}`
-        );
-
-        if (!popup) {
-          throw new Error('Popup blocked. Please allow popups for this site.');
-        }
-
-        // 3. Wait for popup using postMessage listener
-        return new Promise((resolve, reject) => {
-          let timeout: NodeJS.Timeout;
-          let interval: NodeJS.Timeout;
+      // Method 1: Poll for popup closure (fallback method)
+      const pollPopup = () => {
+        if (!popup || popup.closed) {
+          clearInterval(pollInterval);
+          clearTimeout(timeout);
           
-          // Listen for messages from popup
-          const messageHandler = (event: MessageEvent) => {
-            // Security: Only accept messages from expected origins
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-            const apiBaseUrl = apiUrl.replace('/api', '');
-            const allowedOrigins = [
-              'http://localhost:3000',
-              apiBaseUrl,
-              window.location.origin
-            ];
-            
-            if (!allowedOrigins.includes(event.origin)) {
-              console.warn('Ignoring message from unauthorized origin:', event.origin);
-              return;
-            }
-            
-            if (event.data.type === 'google_auth_success') {
-              console.log('✅ Google auth success message received');
-              
-              // Clean up
-              window.removeEventListener('message', messageHandler);
-              clearTimeout(timeout);
-              if (interval) clearInterval(interval);
-              
-              // Store auth data
-              const { token, refresh_token, user } = event.data;
+          // Check if we have auth data in localStorage (set by callback page)
+          const authData = localStorage.getItem('google_auth_data');
+          if (authData) {
+            try {
+              const { token, refresh_token, user } = JSON.parse(authData);
+              localStorage.removeItem('google_auth_data');
               
               if (token && user) {
                 localStorage.setItem('token', token);
@@ -309,128 +301,37 @@ const loginWithGoogle = async (): Promise<{ success: boolean; user?: User; token
                 const userData = convertApiUserToUser(user);
                 setUser(userData);
                 
-                // Close popup if still open
-                if (popup && !popup.closed) {
-                  popup.close();
-                }
-                
                 resolve({ 
                   success: true, 
                   user: userData, 
-                  token: token 
+                  token 
                 });
               } else {
-                reject(new Error('Invalid auth data received'));
+                reject(new Error('Invalid auth data'));
               }
-            } else if (event.data.type === 'google_auth_error') {
-              console.error('❌ Google auth error:', event.data.message);
-              
-              // Clean up
-              window.removeEventListener('message', messageHandler);
-              clearTimeout(timeout);
-              if (interval) clearInterval(interval);
-              
-              // Close popup if still open
-              if (popup && !popup.closed) {
-                popup.close();
-              }
-              
-              reject(new Error(event.data.message || 'Authentication failed'));
+            } catch (error) {
+              reject(new Error('Failed to parse auth data'));
             }
-          };
-          
-          // Add message listener
-          window.addEventListener('message', messageHandler);
-          
-          // Check if popup was closed manually
-          interval = setInterval(() => {
-            if (popup.closed) {
-              window.removeEventListener('message', messageHandler);
-              clearTimeout(timeout);
-              clearInterval(interval);
-              reject(new Error('Authentication cancelled'));
-            }
-          }, 500);
-          
-          // Timeout after 60 seconds
-          timeout = setTimeout(() => {
-            window.removeEventListener('message', messageHandler);
-            clearInterval(interval);
-            if (popup && !popup.closed) {
-              popup.close();
-            }
-            reject(new Error('Authentication timeout'));
-          }, 60000);
-        });
-      } else {
-        throw new Error(response.message || 'Failed to get auth URL');
-      }
-    } catch (apiError) {
-      console.error('Backend API error:', apiError);
-      
-      // Fallback: Direct Google OAuth URL
-      console.log('🔄 Using direct Google OAuth URL...');
-      
-      const clientId = '284143902150-gvbg0vcs1l373afbmgmuv73p10uo1qhe.apps.googleusercontent.com';
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-      const redirectUri = encodeURIComponent(`${apiUrl}/auth/google/callback`);
-      const scope = encodeURIComponent('https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile openid');
-      
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-        `access_type=offline&` +
-        `scope=${scope}&` +
-        `prompt=consent&` +
-        `response_type=code&` +
-        `client_id=${clientId}&` +
-        `redirect_uri=${redirectUri}`;
-      
-      console.log('Direct auth URL:', authUrl);
-      
-      // Open popup with direct URL
-      const width = 500;
-      const height = 600;
-      const left = window.screen.width / 2 - width / 2;
-      const top = window.screen.height / 2 - height / 2;
-      
-      const popup = window.open(
-        authUrl,
-        'google_auth',
-        `width=${width},height=${height},top=${top},left=${left}`
-      );
-
-      if (!popup) {
-        throw new Error('Popup blocked');
-      }
-
-      return new Promise((resolve, reject) => {
-        let timeout: NodeJS.Timeout;
-        let interval: NodeJS.Timeout;
-        
-        // Listen for messages from popup
-        const messageHandler = (event: MessageEvent) => {
-          // Security: Only accept messages from expected origins
-          const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-          const apiBaseUrl = apiUrl.replace('/api', '');
-          const allowedOrigins = [
-            'http://localhost:3000',
-            apiBaseUrl,
-            window.location.origin
-          ];
-          
-          if (!allowedOrigins.includes(event.origin)) {
-            console.warn('Ignoring message from unauthorized origin:', event.origin);
-            return;
+          } else {
+            reject(new Error('Authentication cancelled or failed'));
           }
+        }
+      };
+      
+      // Start polling
+      pollInterval = setInterval(pollPopup, 500);
+      
+      // Method 2: Listen for postMessage
+      const messageHandler = (event: MessageEvent) => {
+        // Accept messages from all origins for development, but check data structure
+        if (event.data && event.data.type) {
+          console.log('Received message:', event.data.type, 'from origin:', event.origin);
           
           if (event.data.type === 'google_auth_success') {
-            console.log('✅ Google auth success message received (direct)');
-            
-            // Clean up
-            window.removeEventListener('message', messageHandler);
+            clearInterval(pollInterval);
             clearTimeout(timeout);
-            if (interval) clearInterval(interval);
+            window.removeEventListener('message', messageHandler);
             
-            // Store auth data
             const { token, refresh_token, user } = event.data;
             
             if (token && user) {
@@ -443,60 +344,61 @@ const loginWithGoogle = async (): Promise<{ success: boolean; user?: User; token
               const userData = convertApiUserToUser(user);
               setUser(userData);
               
-              // Close popup if still open
-              if (popup && !popup.closed) {
-                popup.close();
+              // Try to close popup
+              try {
+                if (popup && !popup.closed) {
+                  popup.close();
+                }
+              } catch (e) {
+                console.warn('Could not close popup:', e);
               }
               
               resolve({ 
                 success: true, 
                 user: userData, 
-                token: token 
+                token 
               });
             } else {
               reject(new Error('Invalid auth data received'));
             }
           } else if (event.data.type === 'google_auth_error') {
-            console.error('❌ Google auth error:', event.data.message);
-            
-            // Clean up
-            window.removeEventListener('message', messageHandler);
+            clearInterval(pollInterval);
             clearTimeout(timeout);
-            if (interval) clearInterval(interval);
+            window.removeEventListener('message', messageHandler);
             
-            // Close popup if still open
-            if (popup && !popup.closed) {
-              popup.close();
+            // Try to close popup
+            try {
+              if (popup && !popup.closed) {
+                popup.close();
+              }
+            } catch (e) {
+              console.warn('Could not close popup:', e);
             }
             
             reject(new Error(event.data.message || 'Authentication failed'));
           }
-        };
+        }
+      };
+      
+      window.addEventListener('message', messageHandler);
+      
+      // Timeout after 120 seconds
+      timeout = setTimeout(() => {
+        clearInterval(pollInterval);
+        window.removeEventListener('message', messageHandler);
         
-        // Add message listener
-        window.addEventListener('message', messageHandler);
-        
-        // Check if popup was closed manually
-        interval = setInterval(() => {
-          if (popup.closed) {
-            window.removeEventListener('message', messageHandler);
-            clearTimeout(timeout);
-            clearInterval(interval);
-            reject(new Error('Authentication cancelled'));
-          }
-        }, 500);
-        
-        // Timeout after 60 seconds
-        timeout = setTimeout(() => {
-          window.removeEventListener('message', messageHandler);
-          clearInterval(interval);
-          if (popup && !popup.closed) {
+        if (popup && !popup.closed) {
+          try {
             popup.close();
+          } catch (e) {
+            console.warn('Could not close popup on timeout:', e);
           }
-          reject(new Error('Authentication timeout'));
-        }, 60000);
-      });
-    }
+        }
+        
+        reject(new Error('Authentication timeout'));
+      }, 120000);
+      
+    });
     
   } catch (error: any) {
     console.error('Google login error:', error);
@@ -507,7 +409,6 @@ const loginWithGoogle = async (): Promise<{ success: boolean; user?: User; token
     };
   }
 };
-
   
   const loginWithFacebook = async (
     accessToken: string, 

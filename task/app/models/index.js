@@ -6,7 +6,6 @@ const dbConfig = require("../config/db.config.js");
 const sequelize = new Sequelize(dbConfig.DB, dbConfig.USER, dbConfig.PASSWORD, {
   host: dbConfig.HOST,
   dialect: dbConfig.dialect,
-  operatorsAliases: false,
   logging: false, // Disable logging for cleaner output
   pool: {
     max: dbConfig.pool.max,
@@ -410,6 +409,134 @@ db.fixUserTable = async function() {
     
   } catch (error) {
     console.error('❌ Error fixing users table:', error.message);
+  }
+};
+
+// ====== FIX SUPERVISOR_ID COLUMN TYPE ======
+db.fixSupervisorIdColumn = async function() {
+  try {
+    console.log('🔧 Checking supervisor_id column type...');
+    
+    // Check if supervisor_id column exists and its type
+    const [columns] = await this.sequelize.query(`
+      SELECT column_name, data_type, is_nullable
+      FROM information_schema.columns 
+      WHERE table_name = 'users' 
+      AND column_name = 'supervisor_id'
+    `);
+    
+    if (columns.length === 0) {
+      console.log('ℹ️ supervisor_id column does not exist, will be created by sync');
+      return;
+    }
+    
+    const column = columns[0];
+    
+    if (column.data_type === 'uuid') {
+      console.log('✅ supervisor_id column is already UUID type');
+      return;
+    }
+    
+    console.log(`⚠️ supervisor_id is ${column.data_type}, converting to UUID...`);
+    
+    // Step 1: Drop any foreign key constraints on supervisor_id
+    try {
+      const [constraints] = await this.sequelize.query(`
+        SELECT constraint_name
+        FROM information_schema.table_constraints
+        WHERE table_name = 'users'
+        AND constraint_type = 'FOREIGN KEY'
+        AND constraint_name LIKE '%supervisor_id%'
+      `);
+      
+      for (const constraint of constraints) {
+        await this.sequelize.query(`
+          ALTER TABLE users DROP CONSTRAINT IF EXISTS ${constraint.constraint_name}
+        `);
+        console.log(`✅ Dropped constraint: ${constraint.constraint_name}`);
+      }
+    } catch (error) {
+      console.log(`ℹ️ No foreign key constraints to drop: ${error.message}`);
+    }
+    
+    // Step 2: Check for existing data and handle it
+    const [rowCount] = await this.sequelize.query(`
+      SELECT COUNT(*)::int as count FROM users WHERE supervisor_id IS NOT NULL
+    `);
+    
+    const hasData = parseInt(rowCount[0]?.count || 0) > 0;
+    
+    if (hasData) {
+      console.log('⚠️ supervisor_id has existing data, checking validity...');
+      // For safety, we'll set all values to NULL if they can't be converted
+      // This is safer than trying to convert invalid data
+      try {
+        // Try to identify invalid UUIDs and set them to NULL
+        if (column.data_type === 'character varying' || column.data_type === 'text') {
+          await this.sequelize.query(`
+            UPDATE users 
+            SET supervisor_id = NULL 
+            WHERE supervisor_id IS NOT NULL 
+            AND supervisor_id !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+          `);
+        }
+      } catch (error) {
+        console.log(`ℹ️ Could not validate existing data: ${error.message}`);
+      }
+    }
+    
+    // Step 3: Convert column type to UUID
+    try {
+      // Try direct conversion if the column is text/varchar
+      if (column.data_type === 'character varying' || column.data_type === 'varchar' || column.data_type === 'text') {
+        // Try to convert valid UUIDs, set invalid ones to NULL
+        await this.sequelize.query(`
+          ALTER TABLE users 
+          ALTER COLUMN supervisor_id TYPE UUID 
+          USING CASE 
+            WHEN supervisor_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' 
+            THEN supervisor_id::uuid 
+            ELSE NULL 
+          END
+        `);
+        console.log('✅ Converted supervisor_id to UUID type');
+      } else {
+        // For other types (integer, etc.), drop and recreate
+        console.log('⚠️ supervisor_id is not a text type, dropping and recreating...');
+        await this.sequelize.query(`
+          ALTER TABLE users 
+          DROP COLUMN supervisor_id
+        `);
+        
+        await this.sequelize.query(`
+          ALTER TABLE users 
+          ADD COLUMN supervisor_id UUID
+        `);
+        console.log('✅ Recreated supervisor_id as UUID type');
+      }
+    } catch (error) {
+      // If direct conversion fails, drop and recreate
+      console.log(`⚠️ Direct conversion failed (${error.message}), dropping and recreating column...`);
+      try {
+        await this.sequelize.query(`
+          ALTER TABLE users 
+          DROP COLUMN IF EXISTS supervisor_id
+        `);
+        
+        await this.sequelize.query(`
+          ALTER TABLE users 
+          ADD COLUMN supervisor_id UUID
+        `);
+        console.log('✅ Recreated supervisor_id as UUID type');
+      } catch (recreateError) {
+        console.error('❌ Error recreating supervisor_id column:', recreateError.message);
+        throw recreateError;
+      }
+    }
+    
+  } catch (error) {
+    console.error('❌ Error fixing supervisor_id column:', error.message);
+    throw error;
   }
 };
 

@@ -13,6 +13,9 @@ module.exports = app => {
     // Get current authenticated user (must be before /:id route)
     router.get("/me", auth.verifyToken, user.getCurrentUser);
   
+    // Save shipping info for authenticated user
+    router.post("/shipping-info", auth.verifyToken, user.saveShippingInfo);
+  
     // Retrieve all published Tutorials
     router.get("/published", user.findAllPublished);
   
@@ -28,6 +31,6 @@ module.exports = app => {
     // Delete all Tutorials
     router.delete("/", user.deleteAll);
   
-    app.use('/api/user', router);
+    app.use('/api/users', router);
   };
   

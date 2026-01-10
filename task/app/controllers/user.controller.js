@@ -346,3 +346,57 @@ exports.getCurrentUser = (req, res) => {
     });
   }
 };
+
+// Save or update shipping info for authenticated user
+exports.saveShippingInfo = async (req, res) => {
+  try {
+    // req.user is set by auth.verifyToken middleware
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Хэрэглэгчийн ID шаардлагатай!"
+      });
+    }
+
+    const userId = req.user.id;
+    const shippingInfo = req.body;
+
+    // Update user with shipping information
+    // Note: Since we don't have dedicated shipping fields in the user model,
+    // we'll store it as JSON in a text field or update existing fields
+    const updateData = {
+      first_name: shippingInfo.firstName || shippingInfo.first_name || null,
+      last_name: shippingInfo.lastName || shippingInfo.last_name || null,
+      phone: shippingInfo.phone || null,
+      email: shippingInfo.email || null,
+    };
+
+    // Remove undefined fields
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) {
+        delete updateData[key];
+      }
+    });
+
+    await User.update(updateData, { where: { id: userId } });
+
+    // Fetch updated user
+    const updatedUser = await User.findByPk(userId, {
+      attributes: { exclude: ['password'] }
+    });
+
+    res.json({
+      success: true,
+      message: "Хүргэлтийн мэдээлэл амжилттай хадгалагдлаа",
+      user: updatedUser,
+      shippingInfo: shippingInfo
+    });
+  } catch (error) {
+    console.error('Save shipping info error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Хүргэлтийн мэдээлэл хадгалахад алдаа гарлаа',
+      error: error.message
+    });
+  }
+};

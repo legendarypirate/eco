@@ -5,7 +5,7 @@ const path = require("path");
 const app = express();
 
 // Allowed origins
-const allowedOrigins = ["http://localhost:3000", "http://localhost:3002"];
+const allowedOrigins = ["http://localhost:3000", "http://localhost:3002","https://label.mn","https://www.label.mn","https://admin.label.mn"];
 
 // CORS configuration
 const corsOptions = {
@@ -36,13 +36,20 @@ app.use("/assets", express.static(path.join(__dirname, "app", "assets")));
 const db = require("./app/models");
 
 // Sync database and handle any errors
-db.sequelize.sync()
-  .then(() => {
+async function syncDatabase() {
+  try {
+    // First, fix the supervisor_id column type issue
+    await db.fixSupervisorIdColumn();
+    
+    // Then sync the database
+    await db.sequelize.sync({ alter: true });
     console.log("Synced db.");
-  })
-  .catch((err) => {
+  } catch (err) {
     console.log("Failed to sync db: " + err.message);
-  });
+  }
+}
+
+syncDatabase();
 
 // simple route
 app.get("/", (req, res) => {
@@ -70,6 +77,7 @@ require('./app/routes/review.routes')(app);
 require('./app/routes/cart.routes')(app);
 require('./app/routes/variation.routes')(app);
 require('./app/routes/color_option.routes')(app);
+require('./app/routes/qpay.routes')(app);
 
 
 // Add error handling for undefined routes

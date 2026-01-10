@@ -52,8 +52,8 @@ module.exports = (sequelize, Sequelize) => {
     
     phone: {
       type: Sequelize.STRING,
-      allowNull: true,
-      unique: true
+      allowNull: true
+      // Removed unique constraint - phone numbers don't need to be unique
     },
     
     password: {
@@ -75,10 +75,7 @@ module.exports = (sequelize, Sequelize) => {
     supervisor_id: {
       type: Sequelize.UUID,
       allowNull: true,
-      references: {
-        model: 'users',
-        key: 'id'
-      }
+      // Foreign key reference removed - not needed for ecommerce project
     },
     
     // username field removed - column doesn't exist in database
@@ -94,7 +91,14 @@ module.exports = (sequelize, Sequelize) => {
     
     // ✅ createdAt, updatedAt-ыг тодорхой зааж өгөх
     createdAt: 'created_at',
-    updatedAt: 'updated_at'
+    updatedAt: 'updated_at',
+    
+    // Default scope to exclude non-existent columns
+    defaultScope: {
+      attributes: {
+        exclude: ['username', 'end_date'] // Exclude columns that don't exist in database
+      }
+    }
   });
 
   return User;

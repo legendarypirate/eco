@@ -69,6 +69,21 @@ module.exports = (sequelize, Sequelize) => {
             type: Sequelize.TEXT,
             allowNull: true
         },
+        invoice_id: {
+            type: Sequelize.STRING(255),
+            allowNull: true,
+            comment: "QPay invoice ID"
+        },
+        qr_image: {
+            type: Sequelize.TEXT,
+            allowNull: true,
+            comment: "QPay QR code image URL"
+        },
+        qr_text: {
+            type: Sequelize.TEXT,
+            allowNull: true,
+            comment: "QPay QR code text"
+        },
         created_at: {
             type: Sequelize.DATE,
             defaultValue: Sequelize.NOW
@@ -91,6 +106,9 @@ module.exports = (sequelize, Sequelize) => {
             },
             {
                 fields: ['created_at']
+            },
+            {
+                fields: ['invoice_id']
             }
         ]
     });
