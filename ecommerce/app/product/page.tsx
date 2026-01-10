@@ -129,12 +129,8 @@ const ProductListPageContent = () => {
       return;
     }
     
-    // On initial load, wait for price range to be initialized only if no category is selected
-    // If a category is selected from URL, allow fetching immediately
-    if (isInitialLoad && !priceRangeInitialized && selectedCategory === 'all') {
-      return;
-    }
-    
+    // Allow initial fetch to proceed - price range will be updated after API response
+    // This fixes the deadlock where products never load on initial page visit
     fetchProducts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategory, priceRange, selectedBrands, sortBy, categories.length]);
@@ -228,19 +224,19 @@ const ProductListPageContent = () => {
       
       switch (sortBy) {
         case 'price-low':
-          url += '&sort=price&order=asc';
+          url += '&sortBy=price_asc';
           break;
         case 'price-high':
-          url += '&sort=price&order=desc';
+          url += '&sortBy=price_desc';
           break;
         case 'rating':
-          url += '&sort=rating&order=desc';
+          url += '&sortBy=rating';
           break;
         case 'discount':
-          url += '&sort=discount&order=desc';
+          url += '&sortBy=discount';
           break;
         default:
-          url += '&sort=createdAt&order=desc';
+          url += '&sortBy=createdAt';
       }
 
       const response = await fetch(url);
