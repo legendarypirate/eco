@@ -580,9 +580,9 @@ const Header = () => {
                       }`}
                     >
                       <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
-                        <span className="text-xs font-medium">📦</span>
+                        <span className="text-[10px] font-medium">📦</span>
                       </div>
-                      <span className="text-xs font-medium truncate max-w-[140px]">
+                      <span className="text-[10px] font-medium truncate max-w-[180px]">
                         Бүгд
                       </span>
                     </button>
@@ -597,7 +597,7 @@ const Header = () => {
                         }`}
                       >
                         {renderCategoryImage(category, 'small')}
-                        <span className="text-xs font-medium truncate max-w-[140px]">
+                        <span className="text-[10px] font-medium truncate max-w-[180px]">
                           {category.name}
                         </span>
                       </button>
@@ -607,7 +607,7 @@ const Header = () => {
                         onClick={() => setIsCategoryMenuOpen(true)}
                         className="flex items-center gap-2 whitespace-nowrap px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg"
                       >
-                        <span className="text-xs font-medium">...</span>
+                        <span className="text-[10px] font-medium">...</span>
                       </button>
                     )}
                   </>
