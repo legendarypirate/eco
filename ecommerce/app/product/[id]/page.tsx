@@ -33,6 +33,8 @@ export default function ProductDetailPage() {
     comment: '',
     hoverRating: 0
   });
+  const [infoImages, setInfoImages] = useState<string[]>([]);
+  const [loadingInfoImages, setLoadingInfoImages] = useState(false);
   const imageRef = useRef<HTMLDivElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
   
@@ -80,6 +82,7 @@ export default function ProductDetailPage() {
     if (params.id) {
       fetchProductData();
       fetchReviews();
+      fetchInfoImages();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id]);
@@ -99,6 +102,24 @@ export default function ProductDetailPage() {
       console.error('Error fetching reviews:', error);
     } finally {
       setLoadingReviews(false);
+    }
+  };
+
+  // Fetch info images for the product
+  const fetchInfoImages = async () => {
+    if (!isValidId(params.id)) return;
+    
+    try {
+      setLoadingInfoImages(true);
+      const response = await fetch(`${API_URL}/product-info-images/product/${params.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setInfoImages(data.map((img: any) => img.imageUrl) || []);
+      }
+    } catch (error) {
+      console.error('Error fetching info images:', error);
+    } finally {
+      setLoadingInfoImages(false);
     }
   };
 
@@ -414,7 +435,7 @@ const handleAddToCart = async () => {
   const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
     // Create toast element
     const toast = document.createElement('div');
-    toast.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full ${
+    toast.className = `fixed top-[100px] right-4 z-50 px-4 py-3 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full ${
       type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' :
       type === 'error' ? 'bg-red-50 border border-red-200 text-red-800' :
       'bg-yellow-50 border border-yellow-200 text-yellow-800'
@@ -670,7 +691,11 @@ const handleAddToCart = async () => {
             <div>
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-gray-600">{product.brand || 'Брэнд'}</span>
+                  {product.brand ? (
+                    <span className="text-sm font-medium text-gray-600">{product.brand}</span>
+                  ) : (
+                    <span></span>
+                  )}
                   <button
                     onClick={handleWishlistToggle}
                     disabled={addingToWishlist}
@@ -733,9 +758,10 @@ const handleAddToCart = async () => {
               {product.description && (
                 <div className="mb-6">
                   <h3 className="text-sm font-bold text-gray-900 mb-2">Тайлбар</h3>
-                  <p className="text-gray-600 text-sm leading-relaxed">
-                    {product.description}
-                  </p>
+                  <div 
+                    className="text-gray-600 text-sm leading-relaxed prose prose-sm max-w-none"
+                    dangerouslySetInnerHTML={{ __html: product.description }}
+                  />
                 </div>
               )}
 
@@ -1024,6 +1050,27 @@ const handleAddToCart = async () => {
                 </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* Info Images Section */}
+        {infoImages.length > 0 && (
+          <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Мэдээллийн зураг</h2>
+            <div className="space-y-4">
+              {infoImages.map((imageUrl, index) => (
+                <div key={index} className="w-full">
+                  <img
+                    src={imageUrl}
+                    alt={`Product info ${index + 1}`}
+                    className="w-full h-auto rounded-lg object-contain"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = "/placeholder.jpg";
+                    }}
+                  />
+                </div>
+              ))}
             </div>
           </div>
         )}

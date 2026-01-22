@@ -58,7 +58,7 @@ module.exports = (sequelize, Sequelize) => {
             allowNull: false
         },
         phone_number: {
-            type: Sequelize.STRING(20),
+            type: Sequelize.STRING(50),
             allowNull: false
         },
         customer_name: {

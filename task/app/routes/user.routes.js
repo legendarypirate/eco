@@ -16,6 +16,13 @@ module.exports = app => {
     // Save shipping info for authenticated user
     router.post("/shipping-info", auth.verifyToken, user.saveShippingInfo);
   
+    // Address routes
+    const address = require("../controllers/address.controller.js");
+    router.post("/addresses", auth.verifyToken, address.saveAddress);
+    router.get("/addresses", auth.verifyToken, address.getUserAddresses);
+    router.delete("/addresses/:id", auth.verifyToken, address.deleteAddress);
+    router.patch("/addresses/:id/default", auth.verifyToken, address.setDefaultAddress);
+  
     // Retrieve all published Tutorials
     router.get("/published", user.findAllPublished);
   

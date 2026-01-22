@@ -116,7 +116,7 @@ const DemandedProducts: React.FC<DemandedProductsProps> = ({ products: propsProd
   // Toast notification function
   const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
     const toast = document.createElement('div');
-    toast.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full ${
+    toast.className = `fixed top-[100px] right-4 z-50 px-4 py-3 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full ${
       type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' :
       type === 'error' ? 'bg-red-50 border border-red-200 text-red-800' :
       'bg-yellow-50 border border-yellow-200 text-yellow-800'

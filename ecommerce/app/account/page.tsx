@@ -591,12 +591,8 @@ const MyPage = () => {
                 </button>
 
                 <button
-                  onClick={() => setActiveTab('payment')}
-                  className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors ${
-                    activeTab === 'payment' 
-                      ? 'bg-gray-900 text-white' 
-                      : 'hover:bg-gray-50 text-gray-700'
-                  }`}
+                  disabled
+                  className="w-full flex items-center justify-between p-3 rounded-lg transition-colors opacity-50 cursor-not-allowed text-gray-400"
                 >
                   <div className="flex items-center gap-3">
                     <CreditCard className="w-4 h-4" />
@@ -606,12 +602,8 @@ const MyPage = () => {
                 </button>
 
                 <button
-                  onClick={() => setActiveTab('settings')}
-                  className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors ${
-                    activeTab === 'settings' 
-                      ? 'bg-gray-900 text-white' 
-                      : 'hover:bg-gray-50 text-gray-700'
-                  }`}
+                  disabled
+                  className="w-full flex items-center justify-between p-3 rounded-lg transition-colors opacity-50 cursor-not-allowed text-gray-400"
                 >
                   <div className="flex items-center gap-3">
                     <Settings className="w-4 h-4" />

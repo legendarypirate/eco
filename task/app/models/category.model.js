@@ -33,6 +33,12 @@ module.exports = (sequelize, Sequelize) => {
                 model: 'categories',
                 key: 'id'
             }
+        },
+        order: {
+            type: Sequelize.INTEGER,
+            allowNull: true,
+            defaultValue: null,
+            comment: 'Order for first-level parent categories only'
         }
     }, {
         timestamps: false,

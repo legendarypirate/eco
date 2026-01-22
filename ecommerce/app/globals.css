@@ -158,3 +158,36 @@ a:focus-visible {
     padding: 0 2rem;
   }
 }
+
+/* List styles for WYSIWYG editor content */
+.prose ol,
+.prose ul {
+  list-style-position: outside;
+  margin-left: 1.5rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding-left: 1.5rem;
+}
+
+.prose ol {
+  list-style-type: decimal;
+}
+
+.prose ul {
+  list-style-type: disc;
+}
+
+.prose li {
+  display: list-item;
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+  padding-left: 0.5rem;
+}
+
+.prose ol ol,
+.prose ul ul,
+.prose ol ul,
+.prose ul ol {
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+}

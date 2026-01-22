@@ -15,6 +15,9 @@ module.exports = app => {
   // Retrieve subcategories by parent ID
   router.get("/parent/:parentId/subcategories", categories.findSubcategories);
 
+  // Update category order (must be before /:id route)
+  router.patch("/order/update", categories.updateOrder);
+
   // Retrieve a single Category with id
   router.get("/:id", categories.findOne);
 

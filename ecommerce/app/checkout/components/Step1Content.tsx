@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, CreditCard, Truck, MapPin, User, Phone, Mail, Lock, Home, FileText } from 'lucide-react';
+import { ArrowLeft, CreditCard, Truck, MapPin, User, Phone, Mail, Lock, Home, FileText, Check } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { apiService } from '@/app/services/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
@@ -43,11 +44,18 @@ const formSchema = z.object({
   deliveryMethod: z.enum(['delivery', 'pickup', 'invoice']),
 }).refine((data) => {
   if (data.deliveryMethod === 'delivery') {
-    return !!data.address && data.address.length >= 3;
+    // Check if address exists and has at least 3 characters after trimming
+    const addressValue = data.address;
+    if (!addressValue || typeof addressValue !== 'string') {
+      return false;
+    }
+    const trimmedAddress = addressValue.trim();
+    // Count actual characters (not bytes) - this handles Unicode correctly
+    return trimmedAddress.length >= 3;
   }
   return true;
 }, {
-  message: 'Дэлгэрэнгүй хаяг оруулна уу',
+  message: 'Дэлгэрэнгүй хаягаа оруулна уу. Хамгийн багадаа 3 тэмдэгт',
   path: ['address'],
 });
 
@@ -56,7 +64,7 @@ interface Step1ContentProps {
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
   handleKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
   handleProceedToPayment: (data: any) => Promise<void>;
-  handleCreateInvoice: (e?: React.MouseEvent) => Promise<void>;
+  handleCreateInvoice: (e?: React.MouseEvent, formDataOverride?: any) => Promise<void>;
   handleDeliveryMethodChange: (deliveryMethod: string) => void;
   isAuthenticated: boolean;
   subtotal: number;
@@ -64,6 +72,15 @@ interface Step1ContentProps {
   isCreatingInvoice: boolean;
   isProcessing: boolean;
   formatPrice: (price: number) => string;
+}
+
+interface SavedAddress {
+  id: string;
+  city: string;
+  district?: string;
+  khoroo?: string;
+  address: string;
+  is_default?: boolean;
 }
 
 const Step1Content = ({
@@ -79,9 +96,12 @@ const Step1Content = ({
   formatPrice
 }: Step1ContentProps) => {
   const router = useRouter();
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [loadingAddresses, setLoadingAddresses] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
+    mode: 'onChange',
     defaultValues: {
       firstName: formData.firstName || '',
       lastName: formData.lastName || '',
@@ -95,6 +115,41 @@ const Step1Content = ({
       deliveryMethod: formData.deliveryMethod || 'delivery',
     },
   });
+
+  // Watch deliveryMethod to conditionally show address fields
+  const deliveryMethod = form.watch('deliveryMethod');
+  const city = form.watch('city');
+
+  // Fetch saved addresses for authenticated users (always fetch, regardless of delivery method)
+  useEffect(() => {
+    if (isAuthenticated) {
+      const fetchAddresses = async () => {
+        try {
+          setLoadingAddresses(true);
+          const response = await apiService.getUserAddresses();
+          if (response.success && response.addresses) {
+            setSavedAddresses(response.addresses);
+            // If there's a default address and no address is filled yet, pre-fill the form
+            const defaultAddress = response.addresses.find((addr: SavedAddress) => addr.is_default);
+            if (defaultAddress && !formData.address && deliveryMethod === 'delivery') {
+              form.setValue('city', defaultAddress.city);
+              form.setValue('district', defaultAddress.district || '');
+              form.setValue('khoroo', defaultAddress.khoroo || '');
+              form.setValue('address', defaultAddress.address);
+            }
+          }
+        } catch (error) {
+          console.error('Failed to fetch addresses:', error);
+        } finally {
+          setLoadingAddresses(false);
+        }
+      };
+      fetchAddresses();
+    } else {
+      // Clear saved addresses if user is not authenticated
+      setSavedAddresses([]);
+    }
+  }, [isAuthenticated, form, formData.address, deliveryMethod]);
 
   // Sync formData from parent when it changes
   useEffect(() => {
@@ -112,9 +167,13 @@ const Step1Content = ({
     });
   }, [formData, form]);
 
-  // Watch deliveryMethod to conditionally show address fields
-  const deliveryMethod = form.watch('deliveryMethod');
-  const city = form.watch('city');
+  // Handle selecting a saved address
+  const handleSelectAddress = useCallback((address: SavedAddress) => {
+    form.setValue('city', address.city);
+    form.setValue('district', address.district || '');
+    form.setValue('khoroo', address.khoroo || '');
+    form.setValue('address', address.address);
+  }, [form]);
 
   const handleLoginRedirect = useCallback(() => {
     router.push('/?login_required=true&redirect=/checkout');
@@ -235,6 +294,48 @@ const Step1Content = ({
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
+                {/* Saved Addresses Section - Show for authenticated users with saved addresses */}
+                {isAuthenticated && (
+                  <>
+                    {loadingAddresses ? (
+                      <div className="text-sm text-gray-500 mb-4">Хаягуудыг ачааллаж байна...</div>
+                    ) : savedAddresses.length > 0 ? (
+                      <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <Label className="text-sm font-semibold mb-3 block text-blue-900">
+                          📍 Өмнө ашигласан хаягууд
+                        </Label>
+                        <div className="space-y-2">
+                          {savedAddresses.map((savedAddr) => (
+                            <button
+                              key={savedAddr.id}
+                              type="button"
+                              onClick={() => handleSelectAddress(savedAddr)}
+                              className="w-full text-left p-3 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-white transition-colors flex items-start gap-3 group bg-white"
+                            >
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-medium text-sm">
+                                    {savedAddr.city}
+                                    {savedAddr.district && `, ${savedAddr.district}`}
+                                    {savedAddr.khoroo && `, ${savedAddr.khoroo}`}
+                                  </span>
+                                  {savedAddr.is_default && (
+                                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">Үндсэн</span>
+                                  )}
+                                </div>
+                                <div className="text-sm text-gray-600">{savedAddr.address}</div>
+                              </div>
+                              <Check className="w-5 h-5 text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </button>
+                          ))}
+                        </div>
+                        <div className="mt-3 text-xs text-gray-600">
+                          💡 Дээрх хаягуудын аль нэгийг сонгох эсвэл доор шинэ хаяг оруулна уу
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+                )}
                 <FormField
                   control={form.control}
                   name="city"
@@ -429,7 +530,10 @@ const Step1Content = ({
           <div className="flex flex-col sm:flex-row gap-3">
             <Button
               type="button"
-              onClick={handleCreateInvoice}
+              onClick={(e) => {
+                const currentFormValues = form.getValues();
+                handleCreateInvoice(e, currentFormValues);
+              }}
               disabled={isCreatingInvoice}
               variant="blue"
             >

@@ -1,12 +1,125 @@
 const db = require("../models");
 const Order = db.orders;
 const OrderItem = db.order_items;
+const Address = db.addresses;
 const axios = require('axios');
 
 // QPay credentials - should be in environment variables
 const QPAY_LOGIN = process.env.QPAY_LOGIN || 'KONO';
 const QPAY_PASSWORD = process.env.QPAY_PASSWORD || '8zcSjp5u';
 const QPAY_BASE_URL = 'https://merchant.qpay.mn/v2';
+
+// Helper function to save address from order (only for authenticated users, non-pickup orders)
+const saveAddressFromOrder = async (order) => {
+  try {
+    // Only save if user is authenticated (not guest) and not pickup
+    if (!order.user_id || order.user_id.startsWith('guest_')) {
+      return { success: false, reason: 'guest_user' };
+    }
+
+    // Skip if pickup order
+    if (!order.shipping_address || order.shipping_address === 'Ирж авах' || order.shipping_address.trim() === '') {
+      return { success: false, reason: 'pickup_order' };
+    }
+
+    // Parse shipping address string to extract components
+    // Format: "Улаанбаатар, Дүүрэг: Баянзүрх, Хороо: 15-р хороо, Байр, орц, давхар, тоот"
+    const addressParts = order.shipping_address.split(',').map(part => part.trim());
+    
+    let city = '';
+    let district = null;
+    let khoroo = null;
+    let address = '';
+
+    // First part is usually the city
+    if (addressParts.length > 0) {
+      city = addressParts[0];
+    }
+
+    // Find district (Дүүрэг: ...)
+    const districtIndex = addressParts.findIndex(part => part.startsWith('Дүүрэг:'));
+    if (districtIndex !== -1) {
+      district = addressParts[districtIndex].replace('Дүүрэг:', '').trim();
+    }
+
+    // Find khoroo (Хороо: ...)
+    const khorooIndex = addressParts.findIndex(part => part.startsWith('Хороо:'));
+    if (khorooIndex !== -1) {
+      khoroo = addressParts[khorooIndex].replace('Хороо:', '').trim();
+    }
+
+    // Everything after district/khoroo is the detailed address
+    const addressStartIndex = Math.max(
+      districtIndex !== -1 ? districtIndex + 1 : 0,
+      khorooIndex !== -1 ? khorooIndex + 1 : 0,
+      1 // At least start from index 1 (after city)
+    );
+    
+    if (addressParts.length > addressStartIndex) {
+      address = addressParts.slice(addressStartIndex).join(', ').trim();
+    } else {
+      // Fallback: if no detailed address found, use the full string minus city/district/khoroo
+      address = order.shipping_address;
+    }
+
+    // Validate we have at least city and address
+    if (!city || !address) {
+      return { success: false, reason: 'invalid_address_format' };
+    }
+
+    // Normalize address data for comparison
+    const normalizedAddress = {
+      city: city.trim(),
+      district: district ? district.trim() : null,
+      khoroo: khoroo ? khoroo.trim() : null,
+      address: address.trim()
+    };
+
+    // Check if address already exists for this user
+    const whereClause = {
+      user_id: order.user_id,
+      city: normalizedAddress.city,
+      address: normalizedAddress.address,
+      district: normalizedAddress.district || null,
+      khoroo: normalizedAddress.khoroo || null
+    };
+
+    const existingAddress = await Address.findOne({
+      where: whereClause
+    });
+
+    if (existingAddress) {
+      // Address already exists, return success without creating duplicate
+      return { 
+        success: true, 
+        address: existingAddress, 
+        isDuplicate: true 
+      };
+    }
+
+    // Create new address (not set as default)
+    const newAddress = await Address.create({
+      user_id: order.user_id,
+      city: normalizedAddress.city,
+      district: normalizedAddress.district,
+      khoroo: normalizedAddress.khoroo,
+      address: normalizedAddress.address,
+      is_default: false
+    });
+
+    return { 
+      success: true, 
+      address: newAddress, 
+      isDuplicate: false 
+    };
+  } catch (error) {
+    console.error('Error saving address from order:', error);
+    return { 
+      success: false, 
+      error: error.message 
+    };
+  }
+};
 
 // Helper function to call e-chuchu API
 const callChuchuAPI = async (order, options = {}) => {
@@ -260,6 +373,24 @@ exports.checkPaymentStatus = async (req, res) => {
         } else if (chuchuResult.reason !== 'pickup_or_no_address') {
           console.warn(`e-chuchu API call failed for order ${order.id}:`, chuchuResult.error);
         }
+
+        // Save address when QPay payment is successful (for authenticated users, non-pickup orders)
+        saveAddressFromOrder(orderWithItems).then(result => {
+          if (result.success) {
+            if (result.isDuplicate) {
+              console.log('Address already exists for user when QPay payment succeeded for order:', order.order_number);
+            } else {
+              console.log('Address saved successfully when QPay payment succeeded for order:', order.order_number);
+            }
+          } else {
+            // Only log if it's not a guest user or pickup order (expected cases)
+            if (result.reason !== 'guest_user' && result.reason !== 'pickup_order') {
+              console.warn('Failed to save address when QPay payment succeeded for order:', order.order_number, result.reason || result.error);
+            }
+          }
+        }).catch(err => {
+          console.error('Error saving address when QPay payment succeeded:', err);
+        });
       }
     }
 
@@ -328,6 +459,24 @@ exports.paymentWebhook = async (req, res) => {
         } else if (chuchuResult.reason !== 'pickup_or_no_address') {
           console.warn(`e-chuchu API call failed for order ${order.id} via webhook:`, chuchuResult.error);
         }
+
+        // Save address when QPay payment is successful via webhook (for authenticated users, non-pickup orders)
+        saveAddressFromOrder(orderWithItems).then(result => {
+          if (result.success) {
+            if (result.isDuplicate) {
+              console.log('Address already exists for user when QPay payment succeeded via webhook for order:', order.order_number);
+            } else {
+              console.log('Address saved successfully when QPay payment succeeded via webhook for order:', order.order_number);
+            }
+          } else {
+            // Only log if it's not a guest user or pickup order (expected cases)
+            if (result.reason !== 'guest_user' && result.reason !== 'pickup_order') {
+              console.warn('Failed to save address when QPay payment succeeded via webhook for order:', order.order_number, result.reason || result.error);
+            }
+          }
+        }).catch(err => {
+          console.error('Error saving address when QPay payment succeeded via webhook:', err);
+        });
       }
     } else if (payment_status === 'CANCELLED' && order.payment_status !== 2) {
       await order.update({ 

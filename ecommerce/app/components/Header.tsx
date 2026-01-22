@@ -106,6 +106,19 @@ const Header = () => {
           (category: ApiCategory) => category.parentId === null
         );
 
+        // Sort by order field, then by name
+        parentCategories.sort((a: ApiCategory, b: ApiCategory) => {
+          const aOrder = (a as any).order;
+          const bOrder = (b as any).order;
+          
+          if (aOrder !== null && aOrder !== undefined && bOrder !== null && bOrder !== undefined) {
+            return aOrder - bOrder;
+          }
+          if (aOrder !== null && aOrder !== undefined) return -1;
+          if (bOrder !== null && bOrder !== undefined) return 1;
+          return a.name.localeCompare(b.name);
+        });
+
         const transformedCategories: Category[] = parentCategories.map(
           (category: ApiCategory) => ({
             id: category.id,
@@ -437,21 +450,15 @@ const Header = () => {
                           <span>Миний захиалгууд</span>
                         </button>
                         <button
-                          onClick={() => {
-                            router.push('/payment-methods');
-                            setIsUserMenuOpen(false);
-                          }}
-                          className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                          disabled
+                          className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm text-gray-400 cursor-not-allowed rounded-lg opacity-60"
                         >
                           <CreditCard className="w-4 h-4" />
                           <span>Төлбөрийн хэрэгсэл</span>
                         </button>
                         <button
-                          onClick={() => {
-                            router.push('/settings');
-                            setIsUserMenuOpen(false);
-                          }}
-                          className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                          disabled
+                          className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm text-gray-400 cursor-not-allowed rounded-lg opacity-60"
                         >
                           <Settings className="w-4 h-4" />
                           <span>Тохиргоо</span>
@@ -520,7 +527,7 @@ const Header = () => {
                               handleAllCategoriesClick();
                               setIsCategoryMenuOpen(false);
                             }}
-                            className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors group"
+                            className="w-full flex items-center space-x-3 px-3 py-2.5 text-xs text-gray-700 hover:bg-gray-50 rounded-lg transition-colors group"
                           >
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center group-hover:from-gray-300 group-hover:to-gray-400 transition-all">
                               <span className="text-sm font-medium">📦</span>
@@ -536,7 +543,7 @@ const Header = () => {
                                 handleCategoryClick(category.id);
                                 setIsCategoryMenuOpen(false);
                               }}
-                              className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors group"
+                              className="w-full flex items-center space-x-3 px-3 py-2.5 text-xs text-gray-700 hover:bg-gray-50 rounded-lg transition-colors group"
                             >
                               {renderCategoryImage(category, 'medium')}
                               <span className="font-medium">{category.name}</span>

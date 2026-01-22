@@ -35,6 +35,8 @@ db.order_items = require("./order_item.model.js")(sequelize, Sequelize);
 db.color_options = require("./color_option.model.js")(sequelize, Sequelize);
 db.reviews = require("./review.model.js")(sequelize, Sequelize);
 db.cart_items = require("./cart_item.model.js")(sequelize, Sequelize);
+db.addresses = require("./address.model.js")(sequelize, Sequelize);
+db.product_info_images = require("./product_info_image.model.js")(sequelize, Sequelize);
 
 // ====== FIXED: Register junction tables WITHOUT foreign keys first ======
 
@@ -85,6 +87,18 @@ db.users.belongsTo(db.users, {
 db.users.hasMany(db.users, {
   foreignKey: "supervisor_id",
   as: "subordinates",
+  constraints: false
+});
+
+// User-Address relationships
+db.users.hasMany(db.addresses, {
+  foreignKey: "user_id",
+  as: "addresses",
+  constraints: false
+});
+db.addresses.belongsTo(db.users, {
+  foreignKey: "user_id",
+  as: "user",
   constraints: false
 });
 
@@ -146,6 +160,18 @@ db.users.hasMany(db.reviews, {
   constraints: false
 });
 
+// Product Info Images relationships
+db.products.hasMany(db.product_info_images, {
+  foreignKey: "productId",
+  as: "infoImages",
+  constraints: false
+});
+db.product_info_images.belongsTo(db.products, {
+  foreignKey: "productId",
+  as: "product",
+  constraints: false
+});
+
 // Call associate functions if they exist (for models that define their own associations)
 Object.keys(db).forEach(modelName => {
   if (db[modelName] && typeof db[modelName].associate === 'function') {
@@ -193,8 +219,8 @@ db.syncDatabase = async function(options = {}) {
     console.log('📦 Step 2: Creating other tables...');
     const otherModels = [
       'product_variations', 'tasks', 'orders', 'order_items',
-      'color_options', 'reviews', 'cart_items',
-      'productFavorites', 'productCategories'
+      'color_options', 'reviews', 'cart_items', 'addresses',
+      'productFavorites', 'productCategories', 'product_info_images'
     ];
     
     for (const modelName of otherModels) {

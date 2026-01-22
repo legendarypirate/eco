@@ -69,14 +69,30 @@ exports.create = async (req, res) => {
       }
 
       const categoryName = req.body.nameMn || req.body.name;
+      const parentId = req.body.parentId || null;
+      
+      // Set order for parent categories (first-level only)
+      let order = null;
+      if (!parentId) {
+        // Get the max order value for parent categories
+        const maxOrderCategory = await Category.findOne({
+          where: { parentId: null },
+          order: [['order', 'DESC']],
+          attributes: ['order']
+        });
+        order = maxOrderCategory && maxOrderCategory.order !== null 
+          ? maxOrderCategory.order + 1 
+          : 1;
+      }
       
       const category = {
         name: categoryName,
         nameMn: categoryName,
         image: imagePath,
         description: req.body.description || "",
-        parentId: req.body.parentId || null,
+        parentId: parentId,
         productCount: req.body.productCount || 0,
+        order: order,
       };
 
       const data = await Category.create(category);
@@ -107,7 +123,11 @@ const getAllChildCategoryIds = (categoryId, categoryMap) => {
 exports.findAll = async (req, res) => {
   try {
     const categories = await Category.findAll({
-      order: [["name", "ASC"]],
+      order: [
+        [Category.sequelize.literal('CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END'), 'ASC'],
+        [Category.sequelize.literal('CASE WHEN parent_id IS NULL THEN "order" ELSE NULL END'), 'ASC'],
+        ['name', 'ASC']
+      ],
     });
 
     // Build a map of parent -> children for efficient lookup
@@ -152,12 +172,29 @@ exports.findAll = async (req, res) => {
     });
 
     const buildTree = (items, parentId = null) => {
-      return items
+      const filtered = items
         .filter((item) => item.parentId === parentId)
         .map((item) => ({
           ...item,
           children: buildTree(items, item.id),
         }));
+      
+      // Sort by order for parent categories, then by name
+      if (parentId === null) {
+        filtered.sort((a, b) => {
+          if (a.order !== null && a.order !== undefined && b.order !== null && b.order !== undefined) {
+            return a.order - b.order;
+          }
+          if (a.order !== null && a.order !== undefined) return -1;
+          if (b.order !== null && b.order !== undefined) return 1;
+          return a.name.localeCompare(b.name);
+        });
+      } else {
+        // For subcategories, just sort by name
+        filtered.sort((a, b) => a.name.localeCompare(b.name));
+      }
+      
+      return filtered;
     };
 
     const treeData = buildTree(categoriesWithCount);
@@ -256,6 +293,10 @@ exports.update = async (req, res) => {
       
       if (req.body.productCount !== undefined) {
         updates.productCount = req.body.productCount;
+      }
+      
+      if (req.body.order !== undefined) {
+        updates.order = req.body.order;
       }
 
       // Handle image upload
@@ -376,6 +417,11 @@ exports.findTopLevel = async (req, res) => {
     const categories = await Category.findAll({
       where: { parentId: null },
       include: [{ model: Category, as: "subcategories" }],
+      order: [
+        [Category.sequelize.literal('CASE WHEN "order" IS NULL THEN 1 ELSE 0 END'), 'ASC'],
+        ['order', 'ASC'],
+        ['name', 'ASC']
+      ],
     });
 
     res.send(categories);
@@ -412,6 +458,51 @@ exports.search = async (req, res) => {
     console.error("Error searching categories:", err);
     res.status(500).send({
       message: err.message || "Error searching categories",
+    });
+  }
+};
+
+// Update category order (for drag and drop)
+exports.updateOrder = async (req, res) => {
+  try {
+    const { categoryIds } = req.body;
+    
+    if (!Array.isArray(categoryIds)) {
+      return res.status(400).send({ message: "categoryIds must be an array" });
+    }
+
+    // Verify all categories are parent categories (first-level only)
+    const categories = await Category.findAll({
+      where: {
+        id: { [Op.in]: categoryIds },
+        parentId: null
+      }
+    });
+
+    if (categories.length !== categoryIds.length) {
+      return res.status(400).send({ 
+        message: "All categories must be first-level parent categories" 
+      });
+    }
+
+    // Update order for each category
+    const updatePromises = categoryIds.map((categoryId, index) => {
+      return Category.update(
+        { order: index + 1 },
+        { where: { id: categoryId } }
+      );
+    });
+
+    await Promise.all(updatePromises);
+
+    res.send({ 
+      message: "Category order updated successfully",
+      order: categoryIds.map((id, index) => ({ id, order: index + 1 }))
+    });
+  } catch (err) {
+    console.error("Error updating category order:", err);
+    res.status(500).send({
+      message: err.message || "Error updating category order",
     });
   }
 };

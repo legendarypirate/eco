@@ -14,6 +14,7 @@ import Step3Content from './components/Step3Content';
 import OrderSummary from './components/OrderSummary';
 import InvoiceModal from './components/InvoiceModal';
 import { generateInvoicePDF, type InvoiceData } from './utils/invoicePDF';
+import { apiService } from '../services/api';
 
 const CheckoutPage = () => {
   const router = useRouter();
@@ -34,6 +35,7 @@ const CheckoutPage = () => {
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [latestFormDataForInvoice, setLatestFormDataForInvoice] = useState<any>(null);
   
   // Refs
   const hasPrefilledRef = useRef(false);
@@ -414,8 +416,10 @@ const CheckoutPage = () => {
     try {
       if (isAuthenticated) {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+        
+        // Save user profile info (firstName, lastName, phone, email)
         try {
-          await fetch(`${API_URL}/users/shipping-info`, {
+          await fetch(`${API_URL}/user/shipping-info`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -425,6 +429,22 @@ const CheckoutPage = () => {
           });
         } catch (shippingError) {
           console.error('Failed to save shipping info:', shippingError);
+        }
+
+        // Save address to addresses table if delivery method is 'delivery'
+        if (currentFormData.deliveryMethod === 'delivery' && currentFormData.city && currentFormData.address) {
+          try {
+            await apiService.saveAddress({
+              city: currentFormData.city,
+              district: currentFormData.district || undefined,
+              khoroo: currentFormData.khoroo || undefined,
+              address: currentFormData.address,
+              is_default: false, // Don't automatically set as default
+            });
+          } catch (addressError) {
+            console.error('Failed to save address:', addressError);
+            // Don't block the checkout flow if address save fails
+          }
         }
       }
 
@@ -504,22 +524,61 @@ const CheckoutPage = () => {
     setCheckInterval(interval);
   }, [checkInterval, isAuthenticated, completeOrder]);
 
-  const handleCreateInvoice = useCallback(async (e?: React.MouseEvent) => {
+  const handleCreateInvoice = useCallback(async (e?: React.MouseEvent, formDataOverride?: any) => {
     if (e) {
       e.preventDefault();
     }
     
-    if (!validateForm()) return;
+    // Use provided form data or fall back to state
+    const currentFormData = formDataOverride || formData;
+    
+    // Store the latest form data for use in handleSubmitInvoice
+    setLatestFormDataForInvoice(currentFormData);
+    
+    // Also update formData state to keep it in sync
+    if (formDataOverride) {
+      setFormData(prev => ({ ...prev, ...formDataOverride }));
+    }
+    
+    // Validate using the current form data
+    if (!currentFormData.firstName || currentFormData.firstName.trim() === '') {
+      alert('Та нэр-ээ оруулна уу.');
+      return;
+    }
+    
+    if (!currentFormData.lastName || currentFormData.lastName.trim() === '') {
+      alert('Та овог-оо оруулна уу.');
+      return;
+    }
+    
+    if (!currentFormData.phone || currentFormData.phone.trim() === '') {
+      alert('Та утасны дугаар-аа оруулна уу.');
+      return;
+    }
+    
+    // Validate phone format
+    if (!/^\d{8}$/.test(currentFormData.phone.trim())) {
+      alert('Утасны дугаар 8 оронтой байх ёстой.');
+      return;
+    }
+    
+    // Validate email if provided
+    if (currentFormData.email && currentFormData.email.trim() !== '' && !/\S+@\S+\.\S+/.test(currentFormData.email.trim())) {
+      alert('Имэйл хаяг буруу байна.');
+      return;
+    }
+    
+    // Note: Address validation is not needed for invoice method (pickup)
     
     setInvoiceFormData({
       name: '',
       register: '',
-      email: formData.email || '',
-      phone: formData.phone || '',
+      email: currentFormData.email || '',
+      phone: currentFormData.phone || '',
     });
     
     setShowInvoiceModal(true);
-  }, [formData.email, formData.phone, validateForm]);
+  }, [formData]);
 
   const handleSubmitInvoice = useCallback(async (e?: React.FormEvent) => {
     if (e) {
@@ -552,9 +611,9 @@ const CheckoutPage = () => {
         grandTotal: subtotal, // Ирж авах: subtotal only
         paymentMethod: 1,
         shippingAddress: fullShippingAddress,
-        phoneNumber: invoiceFormData.phone || formData.phone,
-        customerName: invoiceFormData.name || `${formData.firstName} ${formData.lastName}`.trim(),
-        notes: formData.note || null,
+        phoneNumber: invoiceFormData.phone || (latestFormDataForInvoice || formData).phone,
+        customerName: invoiceFormData.name || `${(latestFormDataForInvoice || formData).firstName} ${(latestFormDataForInvoice || formData).lastName}`.trim(),
+        notes: (latestFormDataForInvoice || formData).note || null,
         invoiceData: {
           name: invoiceFormData.name,
           register: invoiceFormData.register,
@@ -591,6 +650,84 @@ const CheckoutPage = () => {
         setOrderNumber(createdOrder.order_number);
       }
 
+      // Save address and shipping info when invoice is downloaded
+      if (isAuthenticated) {
+        console.log('[Invoice PDF] Saving address and shipping info for authenticated user');
+        
+        // Use latest form data if available, otherwise fall back to formData state
+        const currentFormData = latestFormDataForInvoice || formData;
+        
+        // Save user profile info (firstName, lastName, phone, email)
+        try {
+          const shippingInfoData = {
+            firstName: currentFormData.firstName,
+            lastName: currentFormData.lastName,
+            phone: invoiceFormData.phone || currentFormData.phone,
+            email: invoiceFormData.email || currentFormData.email,
+          };
+          
+          console.log('[Invoice PDF] Saving shipping info:', shippingInfoData);
+          
+          const shippingInfoResponse = await fetch(`${API_URL}/user/shipping-info`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            },
+            body: JSON.stringify(shippingInfoData),
+          });
+          
+          if (shippingInfoResponse.ok) {
+            const shippingResult = await shippingInfoResponse.json();
+            console.log('[Invoice PDF] Shipping info saved successfully:', shippingResult);
+          } else {
+            console.warn('[Invoice PDF] Failed to save shipping info:', await shippingInfoResponse.text());
+          }
+        } catch (shippingError) {
+          console.error('[Invoice PDF] Error saving shipping info:', shippingError);
+        }
+
+        // Save address to addresses table if address information is available
+        if (currentFormData.city && currentFormData.address) {
+          try {
+            const addressData = {
+              city: currentFormData.city,
+              district: currentFormData.district || undefined,
+              khoroo: currentFormData.khoroo || undefined,
+              address: currentFormData.address,
+              is_default: false, // Don't automatically set as default
+            };
+            
+            console.log('[Invoice PDF] Saving address:', addressData);
+            
+            const addressSaveResult = await apiService.saveAddress(addressData);
+            
+            if (addressSaveResult.success) {
+              console.log('[Invoice PDF] Address saved successfully:', {
+                address: addressSaveResult.address,
+                isDuplicate: addressSaveResult.isDuplicate,
+                message: addressSaveResult.message
+              });
+            } else {
+              console.warn('[Invoice PDF] Failed to save address:', addressSaveResult.message);
+            }
+          } catch (addressError) {
+            console.error('[Invoice PDF] Error saving address:', addressError);
+            // Don't block the invoice flow if address save fails
+          }
+        } else {
+          console.log('[Invoice PDF] Skipping address save - city or address not provided', {
+            city: currentFormData.city,
+            address: currentFormData.address,
+            district: currentFormData.district,
+            latestFormDataForInvoice: latestFormDataForInvoice,
+            formData: formData
+          });
+        }
+      } else {
+        console.log('[Invoice PDF] Skipping address save - user not authenticated');
+      }
+
       const invoiceResponse = await fetch(`${API_URL}/order/${createdOrder.id}/invoice/chuchu`, {
         method: 'POST',
         headers: {
@@ -600,7 +737,7 @@ const CheckoutPage = () => {
         body: JSON.stringify({
           address: fullShippingAddress,
           khoroo: '',
-          phone: invoiceFormData.phone || formData.phone,
+          phone: invoiceFormData.phone || (latestFormDataForInvoice || formData).phone,
           invoiceData: invoiceFormData,
         }),
       });
@@ -653,9 +790,9 @@ const CheckoutPage = () => {
         invoiceNumber: createdOrder.order_number || `INV-${createdOrder.id}`,
         invoiceDate: formatDate(today),
         dueDate: formatDate(dueDate),
-        customerName: invoiceFormData.name || `${formData.firstName} ${formData.lastName}`.trim(),
-        customerEmail: invoiceFormData.email || formData.email || '',
-        customerPhone: invoiceFormData.phone || formData.phone || '',
+        customerName: invoiceFormData.name || `${(latestFormDataForInvoice || formData).firstName} ${(latestFormDataForInvoice || formData).lastName}`.trim(),
+        customerEmail: invoiceFormData.email || (latestFormDataForInvoice || formData).email || '',
+        customerPhone: invoiceFormData.phone || (latestFormDataForInvoice || formData).phone || '',
         issuerName: 'ТЭРГҮҮН ГЭРЭГЭ ХХК',
         issuerRegister: '6002536',
         issuerEmail: '',
@@ -668,11 +805,13 @@ const CheckoutPage = () => {
         subtotal: subtotalWithoutVat,
         tax: calculatedTax,
         total: finalTotal,
-        notes: formData.note || undefined,
+        notes: (latestFormDataForInvoice || formData).note || undefined,
       };
       
       // Generate and download PDF
+      console.log('[Invoice PDF] Generating PDF invoice...');
       await generateInvoicePDF(invoiceData);
+      console.log('[Invoice PDF] PDF invoice generated and downloaded successfully');
 
       clearCart();
       setShowInvoiceModal(false);
@@ -684,7 +823,7 @@ const CheckoutPage = () => {
     } finally {
       setIsCreatingInvoice(false);
     }
-  }, [cartItems, formData, invoiceFormData, subtotal, clearCart, validateInvoiceForm, isAuthenticated, user]);
+  }, [cartItems, formData, invoiceFormData, subtotal, clearCart, validateInvoiceForm, isAuthenticated, user, latestFormDataForInvoice]);
 
   // Clean up interval on unmount
   useEffect(() => {

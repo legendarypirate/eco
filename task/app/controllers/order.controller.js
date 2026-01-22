@@ -1,6 +1,7 @@
 const db = require("../models");
 const Order = db.orders;
 const OrderItem = db.order_items;
+const Address = db.addresses;
 const { Op } = require("sequelize");
 const axios = require("axios");
 const PDFDocument = require("pdfkit");
@@ -15,6 +16,118 @@ const generateOrderNumber = () => {
   const day = date.getDate().toString().padStart(2, "0");
   const random = Math.floor(1000 + Math.random() * 9000);
   return `ORD${year}${month}${day}${random}`;
+};
+
+// Helper function to save address from order (only for authenticated users, non-pickup orders)
+const saveAddressFromOrder = async (order) => {
+  try {
+    // Only save if user is authenticated (not guest) and not pickup
+    if (!order.user_id || order.user_id.startsWith('guest_')) {
+      return { success: false, reason: 'guest_user' };
+    }
+
+    // Skip if pickup order
+    if (!order.shipping_address || order.shipping_address === 'Ирж авах' || order.shipping_address.trim() === '') {
+      return { success: false, reason: 'pickup_order' };
+    }
+
+    // Parse shipping address string to extract components
+    // Format: "Улаанбаатар, Дүүрэг: Баянзүрх, Хороо: 15-р хороо, Байр, орц, давхар, тоот"
+    const addressParts = order.shipping_address.split(',').map(part => part.trim());
+    
+    let city = '';
+    let district = null;
+    let khoroo = null;
+    let address = '';
+
+    // First part is usually the city
+    if (addressParts.length > 0) {
+      city = addressParts[0];
+    }
+
+    // Find district (Дүүрэг: ...)
+    const districtIndex = addressParts.findIndex(part => part.startsWith('Дүүрэг:'));
+    if (districtIndex !== -1) {
+      district = addressParts[districtIndex].replace('Дүүрэг:', '').trim();
+    }
+
+    // Find khoroo (Хороо: ...)
+    const khorooIndex = addressParts.findIndex(part => part.startsWith('Хороо:'));
+    if (khorooIndex !== -1) {
+      khoroo = addressParts[khorooIndex].replace('Хороо:', '').trim();
+    }
+
+    // Everything after district/khoroo is the detailed address
+    const addressStartIndex = Math.max(
+      districtIndex !== -1 ? districtIndex + 1 : 0,
+      khorooIndex !== -1 ? khorooIndex + 1 : 0,
+      1 // At least start from index 1 (after city)
+    );
+    
+    if (addressParts.length > addressStartIndex) {
+      address = addressParts.slice(addressStartIndex).join(', ').trim();
+    } else {
+      // Fallback: if no detailed address found, use the full string minus city/district/khoroo
+      address = order.shipping_address;
+    }
+
+    // Validate we have at least city and address
+    if (!city || !address) {
+      return { success: false, reason: 'invalid_address_format' };
+    }
+
+    // Normalize address data for comparison
+    const normalizedAddress = {
+      city: city.trim(),
+      district: district ? district.trim() : null,
+      khoroo: khoroo ? khoroo.trim() : null,
+      address: address.trim()
+    };
+
+    // Check if address already exists for this user
+    const whereClause = {
+      user_id: order.user_id,
+      city: normalizedAddress.city,
+      address: normalizedAddress.address,
+      district: normalizedAddress.district || null,
+      khoroo: normalizedAddress.khoroo || null
+    };
+
+    const existingAddress = await Address.findOne({
+      where: whereClause
+    });
+
+    if (existingAddress) {
+      // Address already exists, return success without creating duplicate
+      return { 
+        success: true, 
+        address: existingAddress, 
+        isDuplicate: true 
+      };
+    }
+
+    // Create new address (not set as default)
+    const newAddress = await Address.create({
+      user_id: order.user_id,
+      city: normalizedAddress.city,
+      district: normalizedAddress.district,
+      khoroo: normalizedAddress.khoroo,
+      address: normalizedAddress.address,
+      is_default: false
+    });
+
+    return { 
+      success: true, 
+      address: newAddress, 
+      isDuplicate: false 
+    };
+  } catch (error) {
+    console.error('Error saving address from order:', error);
+    return { 
+      success: false, 
+      error: error.message 
+    };
+  }
 };
 
 // Helper function to call e-chuchu API
@@ -515,10 +628,37 @@ exports.createInvoiceWithChuchu = async (req, res) => {
       updated_at: new Date()
     });
 
+    // Reload order to get updated data
+    const updatedOrder = await Order.findOne({
+      where: { id: orderId },
+      include: [{ model: OrderItem, as: "items" }]
+    });
+
+    // Save address when invoice is created (PDF will be downloaded client-side right after)
+    // Call asynchronously so it doesn't block the response
+    if (updatedOrder) {
+      saveAddressFromOrder(updatedOrder).then(result => {
+        if (result.success) {
+          if (result.isDuplicate) {
+            console.log('Address already exists for user when invoice was created for order:', order.order_number);
+          } else {
+            console.log('Address saved successfully when invoice was created for order:', order.order_number);
+          }
+        } else {
+          // Only log if it's not a guest user or pickup order (expected cases)
+          if (result.reason !== 'guest_user' && result.reason !== 'pickup_order') {
+            console.warn('Failed to save address when invoice was created for order:', order.order_number, result.reason || result.error);
+          }
+        }
+      }).catch(err => {
+        console.error('Error saving address when invoice was created:', err);
+      });
+    }
+
     res.json({
       success: true,
       message: "Нэхэмжлэх амжилттай үүслээ",
-      order: order
+      order: updatedOrder || order
     });
   } catch (error) {
     console.error("Create invoice with chuchu error:", error);
@@ -715,6 +855,25 @@ exports.generateInvoicePDF = async (req, res) => {
       }
     }).catch(err => {
       console.error('Error calling e-chuchu API when PDF was downloaded:', err);
+    });
+
+    // Save address when PDF is downloaded (for authenticated users, non-pickup orders)
+    // Call asynchronously so it doesn't block PDF generation
+    saveAddressFromOrder(order).then(result => {
+      if (result.success) {
+        if (result.isDuplicate) {
+          console.log('Address already exists for user when PDF was downloaded for order:', order.order_number);
+        } else {
+          console.log('Address saved successfully when PDF was downloaded for order:', order.order_number);
+        }
+      } else {
+        // Only log if it's not a guest user or pickup order (expected cases)
+        if (result.reason !== 'guest_user' && result.reason !== 'pickup_order') {
+          console.warn('Failed to save address when PDF was downloaded for order:', order.order_number, result.reason || result.error);
+        }
+      }
+    }).catch(err => {
+      console.error('Error saving address when PDF was downloaded:', err);
     });
 
     // Finalize PDF

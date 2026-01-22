@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "react-quill/dist/quill.snow.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -119,4 +120,27 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* ReactQuill Editor Styling */
+.quill {
+  @apply rounded-md border border-gray-300 bg-white;
+}
+
+.quill .ql-toolbar {
+  @apply border-b border-gray-300 rounded-t-md bg-gray-50;
+}
+
+.quill .ql-container {
+  @apply rounded-b-md border-0;
+  min-height: 150px;
+}
+
+.quill .ql-editor {
+  @apply text-sm;
+  min-height: 150px;
+}
+
+.quill .ql-editor.ql-blank::before {
+  @apply text-gray-400 italic;
 }

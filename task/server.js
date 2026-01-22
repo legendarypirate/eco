@@ -78,6 +78,7 @@ require('./app/routes/cart.routes')(app);
 require('./app/routes/variation.routes')(app);
 require('./app/routes/color_option.routes')(app);
 require('./app/routes/qpay.routes')(app);
+require('./app/routes/product_info_image.routes')(app);
 
 
 // Add error handling for undefined routes

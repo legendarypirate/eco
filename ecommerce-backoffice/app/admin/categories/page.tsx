@@ -1,8 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Trash2, Edit2, ChevronRight, ChevronDown, Folder, FolderOpen, Search, Image as ImageIcon } from "lucide-react";
+import { Plus, Trash2, Edit2, ChevronRight, ChevronDown, Folder, FolderOpen, Search, Image as ImageIcon, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 // --- Type ---
 export interface Category {
@@ -13,8 +30,49 @@ export interface Category {
   description: string;
   productCount: number;
   parentId: string | null;
+  order: number | null;
   children?: Category[];
   subcategories?: Category[];
+}
+
+// --- Sortable Category Item (for first-level only) ---
+interface SortableCategoryItemProps {
+  category: Category;
+  onAddChild: (parentId: string, name: string, description: string, imageFile?: File) => void;
+  onDelete: (id: string) => void;
+  onEdit: (id: string, updates: { name: string; description?: string; imageFile?: File }) => void;
+  level: number;
+}
+
+function SortableCategoryItem({ category, onAddChild, onDelete, onEdit, level }: SortableCategoryItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: category.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <CategoryItem
+        category={category}
+        onAddChild={onAddChild}
+        onDelete={onDelete}
+        onEdit={onEdit}
+        level={level}
+        dragHandleProps={{ ...attributes, ...listeners }}
+        isDraggable={true}
+      />
+    </div>
+  );
 }
 
 // --- Category Item (Recursive) ---
@@ -24,9 +82,11 @@ interface CategoryItemProps {
   onDelete: (id: string) => void;
   onEdit: (id: string, updates: { name: string; description?: string; imageFile?: File }) => void;
   level: number;
+  dragHandleProps?: any;
+  isDraggable?: boolean;
 }
 
-function CategoryItem({ category, onAddChild, onDelete, onEdit, level }: CategoryItemProps) {
+function CategoryItem({ category, onAddChild, onDelete, onEdit, level, dragHandleProps, isDraggable }: CategoryItemProps) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(category.name);
   const [description, setDescription] = useState(category.description || "");
@@ -72,6 +132,17 @@ function CategoryItem({ category, onAddChild, onDelete, onEdit, level }: Categor
     <div className={`${level > 0 ? 'ml-8' : ''} mt-1`}>
       <div className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-md">
         <div className="flex items-center gap-3 flex-1 min-w-0">
+          {/* Drag handle for first-level categories only */}
+          {isDraggable && level === 0 && (
+            <div
+              {...dragHandleProps}
+              className="cursor-grab active:cursor-grabbing p-1 hover:bg-gray-200 rounded-sm flex-shrink-0 text-gray-400 hover:text-gray-600"
+              title="Эрэмбэлэх"
+            >
+              <GripVertical size={16} />
+            </div>
+          )}
+          
           {hasChildren && (
             <button 
               onClick={() => setExpanded(!expanded)}
@@ -85,7 +156,8 @@ function CategoryItem({ category, onAddChild, onDelete, onEdit, level }: Categor
             </button>
           )}
           
-          {!hasChildren && <div className="w-6 flex-shrink-0" />}
+          {!hasChildren && !isDraggable && <div className="w-6 flex-shrink-0" />}
+          {!hasChildren && isDraggable && level > 0 && <div className="w-6 flex-shrink-0" />}
           
           <div className="flex items-center gap-2 min-w-0">
             <div className="flex-shrink-0">
@@ -307,6 +379,7 @@ function CategoryItem({ category, onAddChild, onDelete, onEdit, level }: Categor
               onDelete={onDelete}
               onEdit={onEdit}
               level={level + 1}
+              isDraggable={false}
             />
           ))}
         </div>
@@ -333,6 +406,16 @@ function buildTree(flat: Category[]): Category[] {
     }
   });
 
+  // Sort roots by order, then by name
+  roots.sort((a, b) => {
+    if (a.order !== null && b.order !== null) {
+      return a.order - b.order;
+    }
+    if (a.order !== null) return -1;
+    if (b.order !== null) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
   return roots;
 }
 
@@ -350,6 +433,67 @@ export default function CategoriesPage() {
 
   // API base URL
   const API_URL = `${process.env.NEXT_PUBLIC_API_URL}/api/categories`;
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Handle drag end - update category order
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) {
+      return;
+    }
+
+    // Only allow reordering first-level categories (parentId === null)
+    const oldIndex = categories.findIndex((cat) => cat.id === active.id);
+    const newIndex = categories.findIndex((cat) => cat.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) {
+      return;
+    }
+
+    // Check if both are first-level categories
+    if (categories[oldIndex].parentId !== null || categories[newIndex].parentId !== null) {
+      return;
+    }
+
+    // Update local state optimistically
+    const newCategories = arrayMove(categories, oldIndex, newIndex);
+    setCategories(newCategories);
+
+    // Update order in backend
+    try {
+      const categoryIds = newCategories
+        .filter((cat) => cat.parentId === null)
+        .map((cat) => cat.id);
+
+      const response = await fetch(`${API_URL}/order/update`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ categoryIds }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update category order');
+      }
+
+      // Refresh categories to get updated order from backend
+      await fetchCategories();
+    } catch (err) {
+      console.error('Error updating category order:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update category order');
+      // Revert to original order on error
+      await fetchCategories();
+    }
+  };
 
   // Fetch categories from API
   const fetchCategories = async () => {
@@ -370,7 +514,16 @@ export default function CategoriesPage() {
         setFlatCategories(data);
         setCategories(buildTree(data));
       } else if (data.tree) {
-        setCategories(data.tree);
+        // If tree is provided, ensure it's sorted by order
+        const sortedTree = [...(data.tree || [])].sort((a, b) => {
+          if (a.order !== null && a.order !== undefined && b.order !== null && b.order !== undefined) {
+            return a.order - b.order;
+          }
+          if (a.order !== null && a.order !== undefined) return -1;
+          if (b.order !== null && b.order !== undefined) return 1;
+          return a.name.localeCompare(b.name);
+        });
+        setCategories(sortedTree);
         setFlatCategories(data.flat || []);
       } else {
         setFlatCategories(data);
@@ -695,17 +848,43 @@ export default function CategoriesPage() {
               <div className="col-span-1 text-right">Үйлдэл</div>
             </div>
 
-            {/* Categories Tree */}
-            {displayCategories.map((category) => (
-              <CategoryItem
-                key={category.id}
-                category={category}
-                onAddChild={handleAddChild}
-                onDelete={handleDelete}
-                onEdit={handleEdit}
-                level={0}
-              />
-            ))}
+            {/* Categories Tree with Drag and Drop */}
+            {!searchTerm ? (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={displayCategories.map((cat) => cat.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {displayCategories.map((category) => (
+                    <SortableCategoryItem
+                      key={category.id}
+                      category={category}
+                      onAddChild={handleAddChild}
+                      onDelete={handleDelete}
+                      onEdit={handleEdit}
+                      level={0}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
+            ) : (
+              // When searching, don't use drag and drop
+              displayCategories.map((category) => (
+                <CategoryItem
+                  key={category.id}
+                  category={category}
+                  onAddChild={handleAddChild}
+                  onDelete={handleDelete}
+                  onEdit={handleEdit}
+                  level={0}
+                  isDraggable={false}
+                />
+              ))
+            )}
           </div>
         )}
 

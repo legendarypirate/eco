@@ -157,6 +157,21 @@ async getGoogleAuthUrl(): Promise<ApiResponse<{ auth_url: string }>> {
   async getOrderById(id: string): Promise<ApiResponse & { order?: any }> {
     return this.request(`/order/${id}`, 'GET') as Promise<ApiResponse & { order?: any }>;
   }
+
+  // Address methods
+  async getUserAddresses(): Promise<ApiResponse & { addresses?: any[] }> {
+    return this.request('/user/addresses', 'GET') as Promise<ApiResponse & { addresses?: any[] }>;
+  }
+
+  async saveAddress(addressData: {
+    city: string;
+    district?: string;
+    khoroo?: string;
+    address: string;
+    is_default?: boolean;
+  }): Promise<ApiResponse & { address?: any; isDuplicate?: boolean }> {
+    return this.request('/user/addresses', 'POST', addressData) as Promise<ApiResponse & { address?: any; isDuplicate?: boolean }>;
+  }
 }
 
 export const apiService = new ApiService();

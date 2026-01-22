@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Plus, Edit, Eye, Trash, Upload, X, ChevronLeft, Minus, Copy, Package, Check, AlertCircle, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,137 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import dynamic from "next/dynamic";
+
+// Polyfill for findDOMNode to support React 19 compatibility with react-quill
+// This is a workaround for react-quill's use of the deprecated findDOMNode API
+if (typeof window !== "undefined") {
+  try {
+    const ReactDOM = require("react-dom");
+    if (ReactDOM && !ReactDOM.findDOMNode) {
+      ReactDOM.findDOMNode = function(componentOrElement: any): Element | Text | null {
+        if (componentOrElement == null) {
+          return null;
+        }
+        // If it's already a DOM node, return it
+        if (componentOrElement.nodeType === 1 || componentOrElement.nodeType === 3) {
+          return componentOrElement;
+        }
+        // Try to find the DOM node from React's internal structure (React 19)
+        if (componentOrElement && typeof componentOrElement === "object") {
+          // React 19 uses different internal structure
+          const reactInternalInstance = (componentOrElement as any)._reactInternalInstance || 
+                                       (componentOrElement as any)._reactInternalFiber ||
+                                       (componentOrElement as any).__reactInternalInstance ||
+                                       (componentOrElement as any).__reactFiber$;
+          
+          if (reactInternalInstance) {
+            let fiber: any = reactInternalInstance;
+            while (fiber) {
+              if (fiber.stateNode) {
+                const node = fiber.stateNode;
+                if (node && (node.nodeType === 1 || node.nodeType === 3)) {
+                  return node;
+                }
+              }
+              fiber = fiber.return || fiber.owner;
+            }
+          }
+          // Fallback: try to get from refs if available
+          if ((componentOrElement as any).refs) {
+            const refs = (componentOrElement as any).refs;
+            const firstRefKey = Object.keys(refs)[0];
+            if (firstRefKey && refs[firstRefKey] && refs[firstRefKey].nodeType) {
+              return refs[firstRefKey];
+            }
+          }
+        }
+        return null;
+      };
+    }
+  } catch (e) {
+    // Silently fail if ReactDOM is not available
+    console.warn("Could not polyfill findDOMNode:", e);
+  }
+}
+
+// Dynamically import ReactQuill to avoid SSR issues
+// Using a more robust dynamic import with loading state
+const ReactQuill = dynamic(
+  async () => {
+    const { default: RQ } = await import("react-quill");
+    // Import CSS dynamically
+    if (typeof window !== "undefined") {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = "https://cdn.quilljs.com/1.3.6/quill.snow.css";
+      document.head.appendChild(link);
+    }
+    return RQ;
+  },
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="min-h-[150px] border border-gray-300 rounded-md p-3 bg-white">
+        <textarea
+          className="w-full h-full min-h-[150px] resize-none border-none outline-none"
+          placeholder="Loading editor..."
+          disabled
+        />
+      </div>
+    )
+  }
+);
+
+// Client-side wrapper for ReactQuill to prevent findDOMNode errors
+interface QuillEditorProps {
+  value?: string;
+  onChange?: (value: string) => void;
+  placeholder?: string;
+  theme?: string;
+  modules?: any;
+  formats?: string[];
+  style?: React.CSSProperties;
+  [key: string]: any;
+}
+
+const QuillEditor = React.forwardRef<any, QuillEditorProps>(
+  ({ value, onChange, placeholder, ...props }, ref) => {
+    const [isMounted, setIsMounted] = useState(false);
+    const editorRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+      setIsMounted(true);
+    }, []);
+
+    if (!isMounted) {
+      return (
+        <div className="min-h-[150px] border border-gray-300 rounded-md p-3 bg-white">
+          <textarea
+            className="w-full h-full min-h-[150px] resize-none border-none outline-none"
+            value={value || ""}
+            onChange={(e) => onChange?.(e.target.value)}
+            placeholder={placeholder}
+            disabled
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div ref={editorRef} className="quill-wrapper">
+        <ReactQuill 
+          value={value} 
+          onChange={onChange} 
+          placeholder={placeholder} 
+          {...props} 
+        />
+      </div>
+    );
+  }
+);
+
+QuillEditor.displayName = "QuillEditor";
 
 // Simple Textarea component
 const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(
@@ -322,7 +453,7 @@ function TreeSelect({ categories, value, onChange, placeholder = "Ангилал
 interface ProductEditFormProps {
   product: Product;
   onCancel: () => void;
-  onSave: (product: Product, uploadedImages: string[]) => void;
+  onSave: (product: Product, uploadedImages: string[]) => Promise<{ success: boolean; productId?: string }>;
   isCreating?: boolean;
   categories: Category[];
 }
@@ -336,6 +467,10 @@ function ProductEditForm({ product, onCancel, onSave, isCreating = false, catego
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
+  const [infoImageFiles, setInfoImageFiles] = useState<File[]>([]);
+  const [infoImages, setInfoImages] = useState<string[]>([]);
+  const [loadingInfoImages, setLoadingInfoImages] = useState(false);
+  const [uploadingInfoImages, setUploadingInfoImages] = useState(false);
 
   // Function to upload images to Cloudinary
   const uploadToCloudinary = async (file: File): Promise<string> => {
@@ -504,6 +639,113 @@ function ProductEditForm({ product, onCancel, onSave, isCreating = false, catego
     updateField('category', categoryName);
   };
 
+  // Fetch existing info images when product loads
+  useEffect(() => {
+    if (product.id && !isCreating) {
+      fetchInfoImages();
+    }
+  }, [product.id, isCreating]);
+
+  const fetchInfoImages = async () => {
+    if (!product.id) return;
+    try {
+      setLoadingInfoImages(true);
+      const response = await fetch(`${API_URL}/product-info-images/product/${product.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setInfoImages(data.map((img: any) => img.imageUrl));
+      }
+    } catch (error) {
+      console.error('Error fetching info images:', error);
+    } finally {
+      setLoadingInfoImages(false);
+    }
+  };
+
+  const handleInfoImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const newFiles = Array.from(files);
+    
+    // Check total image count (existing + new)
+    const existingCount = infoImages.filter(url => 
+      url.startsWith('http') && !url.startsWith('blob:')
+    ).length;
+    const totalCount = existingCount + newFiles.length;
+    
+    if (totalCount > 5) {
+      alert(`Хамгийн ихдээ 5 зураг оруулж болно. Та ${existingCount} зурагтай, ${newFiles.length} шинэ зураг нэмэх гэж байна.`);
+      e.target.value = ''; // Reset input
+      return;
+    }
+    
+    // Limit to 5 total
+    const allowedNewFiles = newFiles.slice(0, 5 - existingCount);
+    if (allowedNewFiles.length < newFiles.length) {
+      alert(`Хамгийн ихдээ 5 зураг оруулж болно. ${allowedNewFiles.length} зураг нэмэгдлээ.`);
+    }
+    
+    const previewUrls = allowedNewFiles.map(file => URL.createObjectURL(file));
+    setInfoImages(prev => [...prev, ...previewUrls]);
+    setInfoImageFiles(prev => [...prev, ...allowedNewFiles]);
+    e.target.value = ''; // Reset input
+  };
+
+  const removeInfoImage = (index: number) => {
+    setInfoImages(prev => prev.filter((_, i) => i !== index));
+    setInfoImageFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const saveInfoImages = async (productId: string) => {
+    if (infoImageFiles.length === 0 && infoImages.length === 0) return;
+
+    try {
+      setUploadingInfoImages(true);
+      
+      // Upload new images to Cloudinary
+      const uploadedUrls: string[] = [];
+      for (let i = 0; i < infoImageFiles.length; i++) {
+        const file = infoImageFiles[i];
+        const url = await uploadToCloudinary(file);
+        uploadedUrls.push(url);
+      }
+
+      // Combine existing URLs (filter out blob URLs) with new uploaded URLs
+      const existingUrls = infoImages.filter(url => 
+        url.startsWith('http') && !url.startsWith('blob:')
+      );
+      const allImageUrls = [...existingUrls, ...uploadedUrls];
+
+      // Limit to 5 images max
+      const limitedImageUrls = allImageUrls.slice(0, 5);
+
+      // Delete existing info images for this product
+      await fetch(`${API_URL}/product-info-images/product/${productId}`, {
+        method: 'DELETE'
+      });
+
+      // Bulk create new info images
+      if (limitedImageUrls.length > 0) {
+        await fetch(`${API_URL}/product-info-images/bulk`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            productId: productId,
+            images: limitedImageUrls
+          })
+        });
+      }
+    } catch (error) {
+      console.error('Error saving info images:', error);
+      throw error;
+    } finally {
+      setUploadingInfoImages(false);
+    }
+  };
+
  const handleSave = async () => {
   try {
     setUploading(true);
@@ -544,7 +786,14 @@ function ProductEditForm({ product, onCancel, onSave, isCreating = false, catego
       categoryId: cleanProduct.categoryId
     });
 
-    onSave(cleanProduct, uploadedImageUrls);
+    // Save product first
+    const saveResult = await onSave(cleanProduct, uploadedImageUrls);
+    
+    // Then save info images if product was created/updated successfully
+    const productId = saveResult?.productId || cleanProduct.id || form.id;
+    if (productId && (saveResult?.success !== false)) {
+      await saveInfoImages(productId);
+    }
   } catch (error) {
     console.error('Error uploading images:', error);
     setUploadErrors(['Зурагнуудыг оруулахад алдаа гарлаа. Дахин оролдоно уу.']);
@@ -555,11 +804,12 @@ function ProductEditForm({ product, onCancel, onSave, isCreating = false, catego
   return (
     <div className="space-y-6 h-full overflow-y-auto">
       <Tabs defaultValue="basic" className="w-full">
-        <TabsList className="grid grid-cols-4 mb-4">
+        <TabsList className="grid grid-cols-5 mb-4">
           <TabsTrigger value="basic">Үндсэн мэдээлэл</TabsTrigger>
           <TabsTrigger value="details">Дэлгэрэнгүй</TabsTrigger>
           <TabsTrigger value="attributes">Шинж чанарууд</TabsTrigger>
           <TabsTrigger value="variants">Вариантууд</TabsTrigger>
+          <TabsTrigger value="info-images">Мэдээллийн зураг</TabsTrigger>
         </TabsList>
 
         {/* Upload Status */}
@@ -594,7 +844,7 @@ function ProductEditForm({ product, onCancel, onSave, isCreating = false, catego
                 onChange={(e) => updateField('sku', e.target.value)} 
                 placeholder="PRD-001"
                 disabled={uploading}
-              />
+              /> 
             </div>
             <div>
               <label className="text-sm font-medium block mb-1">Ангилал</label>
@@ -715,24 +965,58 @@ function ProductEditForm({ product, onCancel, onSave, isCreating = false, catego
         <TabsContent value="details" className="space-y-6">
           <div>
             <label className="text-sm font-medium block mb-1">Тайлбар (Монгол)</label>
-            <Textarea 
-              value={form.descriptionMn || form.description} 
-              onChange={(e) => updateField('descriptionMn', e.target.value)} 
-              placeholder="Барааны тайлбар монголоор"
-              rows={3}
-              disabled={uploading}
-            />
+            <div className={uploading ? "opacity-50 pointer-events-none" : ""}>
+              <QuillEditor 
+                theme="snow"
+                value={form.descriptionMn || form.description || ""} 
+                onChange={(value: string) => updateField('descriptionMn', value)} 
+                placeholder="Барааны тайлбар монголоор"
+                modules={{
+                  toolbar: [
+                    [{ 'header': [1, 2, 3, false] }],
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                    [{ 'color': [] }, { 'background': [] }],
+                    ['link', 'image'],
+                    ['clean']
+                  ]
+                }}
+                formats={[
+                  'header', 'bold', 'italic', 'underline', 'strike',
+                  'list', 'bullet', 'color', 'background',
+                  'link', 'image'
+                ]}
+                style={{ minHeight: '150px' }}
+              />
+            </div>
           </div>
 
           <div>
             <label className="text-sm font-medium block mb-1">Тайлбар (Англи)</label>
-            <Textarea 
-              value={form.description} 
-              onChange={(e) => updateField('description', e.target.value)} 
-              placeholder="Product description in English"
-              rows={3}
-              disabled={uploading}
-            />
+            <div className={uploading ? "opacity-50 pointer-events-none" : ""}>
+              <QuillEditor 
+                theme="snow"
+                value={form.description || ""} 
+                onChange={(value: string) => updateField('description', value)} 
+                placeholder="Product description in English"
+                modules={{
+                  toolbar: [
+                    [{ 'header': [1, 2, 3, false] }],
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                    [{ 'color': [] }, { 'background': [] }],
+                    ['link', 'image'],
+                    ['clean']
+                  ]
+                }}
+                formats={[
+                  'header', 'bold', 'italic', 'underline', 'strike',
+                  'list', 'bullet', 'color', 'background',
+                  'link', 'image'
+                ]}
+                style={{ minHeight: '150px' }}
+              />
+            </div>
           </div>
 
           <div>
@@ -1055,6 +1339,108 @@ function ProductEditForm({ product, onCancel, onSave, isCreating = false, catego
             </div>
           )}
         </TabsContent>
+
+        {/* Info Images Tab */}
+        <TabsContent value="info-images" className="space-y-6">
+          <div className="bg-gray-50 p-4 rounded-md">
+            <h4 className="font-medium mb-3">Мэдээллийн зураг</h4>
+            <p className="text-sm text-gray-600 mb-4">
+              Энд барааны мэдээллийн зургуудыг оруулна уу. Эдгээр зурагнууд барааны дэлгэрэнгүй хуудас дээр үнэлгээний хэсгийн дээр харагдана.
+            </p>
+            
+            <div>
+              <label className="text-sm font-medium block mb-1">
+                Зураг оруулах 
+                <span className="text-xs text-gray-500 ml-2">
+                  (Хамгийн ихдээ 5 зураг, одоо: {infoImages.filter(url => 
+                    url.startsWith('http') && !url.startsWith('blob:')
+                  ).length}/5)
+                </span>
+              </label>
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                <Input
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={handleInfoImageUpload}
+                  className="hidden"
+                  id="info-image-upload"
+                  disabled={uploading || loadingInfoImages || uploadingInfoImages || infoImages.filter(url => 
+                    url.startsWith('http') && !url.startsWith('blob:')
+                  ).length >= 5}
+                />
+                <label 
+                  htmlFor="info-image-upload" 
+                  className={`cursor-pointer ${
+                    (uploading || loadingInfoImages || uploadingInfoImages || infoImages.filter(url => 
+                      url.startsWith('http') && !url.startsWith('blob:')
+                    ).length >= 5) ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {uploadingInfoImages ? (
+                    <>
+                      <Loader2 className="mx-auto h-8 w-8 text-blue-600 mb-2 animate-spin" />
+                      <p className="text-sm text-blue-600 font-medium">
+                        Зурагнуудыг Cloudinary-д оруулж байна...
+                      </p>
+                      <Progress value={uploadProgress} className="mt-2 max-w-xs mx-auto" />
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+                      <p className="text-sm text-gray-600">
+                        {uploading || loadingInfoImages 
+                          ? "Зурагнуудыг оруулж байна..." 
+                          : infoImages.filter(url => 
+                              url.startsWith('http') && !url.startsWith('blob:')
+                            ).length >= 5
+                            ? "Хамгийн ихдээ 5 зураг оруулж болно"
+                            : "Зурагнуудыг энд дарж оруулна уу"}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Хамгийн ихдээ 5 зураг оруулж болно
+                      </p>
+                    </>
+                  )}
+                </label>
+              </div>
+              
+              {loadingInfoImages && (
+                <div className="mt-4 text-center text-sm text-gray-600">
+                  <Loader2 className="mx-auto h-5 w-5 animate-spin mb-2" />
+                  Мэдээллийн зургуудыг ачаалж байна...
+                </div>
+              )}
+              
+              {infoImages.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-sm font-medium mb-2">
+                    Зургийн урьдчилсан харца ({infoImages.length}/5)
+                  </p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {infoImages.map((image, index) => (
+                      <div key={index} className="relative group">
+                        <img
+                          src={image}
+                          alt={`Info Image ${index + 1}`}
+                          className="w-full h-32 object-cover rounded border"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeInfoImage(index)}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          disabled={uploading || uploadingInfoImages}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </TabsContent>
       </Tabs>
 
       <div className="flex justify-end gap-2 pt-4 border-t">
@@ -1295,10 +1681,20 @@ export default function AdminProductList() {
   async function saveEdit(edited: Product, uploadedImages: string[]) {
     try {
       let success = false;
+      let savedProductId = edited.id;
       
       if (isCreating) {
         success = await createProduct(edited);
         if (success) {
+          // Fetch the created product to get its ID
+          const response = await fetch(`${API_URL}/products?sku=${edited.sku}`);
+          if (response.ok) {
+            const data = await response.json();
+            const products = Array.isArray(data) ? data : (data.products || []);
+            if (products.length > 0) {
+              savedProductId = products[0].id;
+            }
+          }
           setIsEditOpen(false);
           setSelected(null);
           setIsCreating(false);
@@ -1315,8 +1711,11 @@ export default function AdminProductList() {
       if (!success) {
         // Handle error (already shown by setError)
       }
+      
+      return { success, productId: savedProductId || undefined };
     } catch (error) {
       console.error('Error saving product:', error);
+      return { success: false, productId: undefined };
     }
   }
 
