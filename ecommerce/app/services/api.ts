@@ -172,6 +172,11 @@ async getGoogleAuthUrl(): Promise<ApiResponse<{ auth_url: string }>> {
   }): Promise<ApiResponse & { address?: any; isDuplicate?: boolean }> {
     return this.request('/user/addresses', 'POST', addressData) as Promise<ApiResponse & { address?: any; isDuplicate?: boolean }>;
   }
+
+  // Bank account methods
+  async getActiveBankAccounts(): Promise<ApiResponse & { data?: any[] }> {
+    return this.request('/bank-accounts/active', 'GET') as Promise<ApiResponse & { data?: any[] }>;
+  }
 }
 
 export const apiService = new ApiService();

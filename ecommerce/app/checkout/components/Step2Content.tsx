@@ -1,11 +1,30 @@
 "use client";
 
+import { useState, useEffect } from 'react';
 import { ArrowLeft, CreditCard, QrCode, Wallet, CheckCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/app/components/ui/radio-group';
 import { Label } from '@/app/components/ui/label';
 import PaymentAppLink from './PaymentAppLink';
+
+interface BankAccount {
+  id: number;
+  bank_name: string;
+  account_number: string;
+  account_name: string;
+  is_active: boolean;
+  display_order: number;
+  color_scheme: string;
+}
+
+const colorSchemeClasses: Record<string, string> = {
+  blue: 'bg-blue-50 border-blue-200',
+  green: 'bg-green-50 border-green-200',
+  purple: 'bg-purple-50 border-purple-200',
+  orange: 'bg-orange-50 border-orange-200',
+  red: 'bg-red-50 border-red-200',
+};
 
 interface Step2ContentProps {
   paymentMethod: string;
@@ -36,6 +55,37 @@ const Step2Content = ({
   completeOrder,
   setStep
 }: Step2ContentProps) => {
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [loadingBankAccounts, setLoadingBankAccounts] = useState(true);
+
+  // Fetch bank accounts
+  useEffect(() => {
+    const fetchBankAccounts = async () => {
+      try {
+        setLoadingBankAccounts(true);
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+        const response = await fetch(`${API_URL}/api/bank-accounts/active`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch bank accounts');
+        }
+        
+        const result = await response.json();
+        if (result.success && result.data) {
+          setBankAccounts(result.data);
+        }
+      } catch (error) {
+        console.error('Error fetching bank accounts:', error);
+        // Keep empty array on error
+        setBankAccounts([]);
+      } finally {
+        setLoadingBankAccounts(false);
+      }
+    };
+
+    fetchBankAccounts();
+  }, []);
+
   return (
     <div className="space-y-6">
       <Card>
@@ -184,47 +234,44 @@ const Step2Content = ({
           {paymentMethod === 'bank' && (
             <div className="py-6">
               <div className="max-w-lg mx-auto">
-                <div className="space-y-4">
-                  <Card className="bg-blue-50 border-blue-200">
-                    <CardContent className="pt-6">
-                      <h3 className="font-bold text-gray-900 mb-2">Хаан банк</h3>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Дансны дугаар:</span>
-                          <span className="font-mono font-bold">5012345678</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Дансны нэр:</span>
-                          <span className="font-medium">1018shop LLC</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Гүйлгээний утга:</span>
-                          <span className="font-medium">{orderNumber}</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card className="bg-green-50 border-green-200">
-                    <CardContent className="pt-6">
-                      <h3 className="font-bold text-gray-900 mb-2">Голомт банк</h3>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Дансны дугаар:</span>
-                          <span className="font-mono font-bold">4012345678</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Дансны нэр:</span>
-                          <span className="font-medium">1018shop LLC</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Гүйлгээний утга:</span>
-                          <span className="font-medium">{orderNumber}</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
+                {loadingBankAccounts ? (
+                  <div className="text-center py-8">
+                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mb-4"></div>
+                    <p className="text-gray-600">Банкны дансыг уншиж байна...</p>
+                  </div>
+                ) : bankAccounts.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Wallet className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">Одоогоор банкны данс байхгүй байна</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {bankAccounts.map((account) => {
+                      const colorClass = colorSchemeClasses[account.color_scheme] || colorSchemeClasses.blue;
+                      return (
+                        <Card key={account.id} className={colorClass}>
+                          <CardContent className="pt-6">
+                            <h3 className="font-bold text-gray-900 mb-2">{account.bank_name}</h3>
+                            <div className="space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Дансны дугаар:</span>
+                                <span className="font-mono font-bold">{account.account_number}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Дансны нэр:</span>
+                                <span className="font-medium">{account.account_name}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Гүйлгээний утга:</span>
+                                <span className="font-medium">{orderNumber}</span>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           )}

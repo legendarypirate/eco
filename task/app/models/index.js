@@ -37,6 +37,7 @@ db.reviews = require("./review.model.js")(sequelize, Sequelize);
 db.cart_items = require("./cart_item.model.js")(sequelize, Sequelize);
 db.addresses = require("./address.model.js")(sequelize, Sequelize);
 db.product_info_images = require("./product_info_image.model.js")(sequelize, Sequelize);
+db.bank_accounts = require("./bank_account.model.js")(sequelize, Sequelize);
 
 // ====== FIXED: Register junction tables WITHOUT foreign keys first ======
 

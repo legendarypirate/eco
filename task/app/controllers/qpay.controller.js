@@ -405,7 +405,7 @@ exports.checkPaymentStatus = async (req, res) => {
         }).catch(err => {
           console.error('Error saving address when QPay payment succeeded:', err);
         });
-      }
+    }
 
     res.json({
       success: true,
