@@ -64,7 +64,7 @@ const Step2Content = ({
       try {
         setLoadingBankAccounts(true);
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-        const response = await fetch(`${API_URL}/api/bank-accounts/active`);
+        const response = await fetch(`${API_URL}/bank-accounts/active`);
         
         if (!response.ok) {
           throw new Error('Failed to fetch bank accounts');
