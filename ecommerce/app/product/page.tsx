@@ -5,6 +5,7 @@ import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Filter, X, ChevronDown, ChevronRight, Star, ShoppingCart, Sliders, Loader2 } from 'lucide-react';
+import { useCart } from '../context/CartContext';
 
 interface Product {
   id: string;
@@ -85,6 +86,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 const ProductListPageContent = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { addToCart } = useCart();
   const categoryId = searchParams.get('category') || 'all';
   
   const [selectedCategory, setSelectedCategory] = useState<string>(categoryId);
@@ -446,12 +448,110 @@ const ProductListPageContent = () => {
     router.push(`/product/${product.id}`);
   };
 
-  const handleAddToCart = (product: Product, e: React.MouseEvent) => {
+  // Toast notification function
+  const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full ${
+      type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' :
+      type === 'error' ? 'bg-red-50 border border-red-200 text-red-800' :
+      'bg-yellow-50 border border-yellow-200 text-yellow-800'
+    }`;
+    
+    toast.innerHTML = `
+      <div class="flex items-center">
+        <div class="mr-3">
+          ${type === 'success' ? '✅' : type === 'error' ? '❌' : '⚠️'}
+        </div>
+        <div class="font-medium">${message}</div>
+      </div>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // Animate in
+    setTimeout(() => {
+      toast.classList.remove('translate-x-full');
+    }, 10);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+      toast.classList.add('translate-x-full');
+      setTimeout(() => {
+        document.body.removeChild(toast);
+      }, 300);
+    }, 3000);
+  };
+
+  const handleAddToCart = async (product: Product, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!product) return;
     
-    const displayName = product.nameMn || product.name || 'Бүтээгдэхүүн';
-    alert(`${displayName} сагсанд нэмэгдлээ!`);
+    // Check if product is in stock
+    if (!product.inStock) {
+      showToast('Энэ бүтээгдэхүүн дууссан байна', 'warning');
+      return;
+    }
+    
+    try {
+      // Get the first available variation or use base product
+      let selectedVariation: ProductVariation | null = null;
+      if (product.variations && product.variations.length > 0) {
+        selectedVariation = product.variations.find(v => v.inStock) || product.variations[0];
+      }
+      
+      // Determine price and stock status
+      const currentPrice = selectedVariation 
+        ? parseFloat(selectedVariation.price) 
+        : parseFloat(product.price);
+      const currentOriginalPrice = selectedVariation && selectedVariation.originalPrice
+        ? parseFloat(selectedVariation.originalPrice)
+        : product.originalPrice ? parseFloat(product.originalPrice) : undefined;
+      const currentInStock = selectedVariation 
+        ? selectedVariation.inStock 
+        : product.inStock;
+      
+      if (!currentInStock) {
+        showToast('Энэ бүтээгдэхүүн дууссан байна', 'warning');
+        return;
+      }
+      
+      // Keep product.id as string (UUID)
+      const productId = String(product.id);
+      
+      // Create CartItem object with UUID string ID
+      const cartItem = {
+        id: productId, // UUID string
+        product: {
+          id: productId, // UUID string
+          name: product.name,
+          nameMn: product.nameMn || product.name,
+          price: currentPrice,
+          originalPrice: currentOriginalPrice,
+          image: product.images?.[0] || '',
+          thumbnail: product.thumbnail || product.images?.[0] || '',
+          category: product.category || '',
+          inStock: currentInStock
+        },
+        quantity: 1,
+        selectedSize: selectedVariation?.attributes?.size || undefined,
+        selectedColor: selectedVariation?.attributes?.color || undefined,
+        addedAt: new Date().toISOString()
+      };
+      
+      const result = addToCart(cartItem);
+      
+      if (result.alreadyExists) {
+        showToast('энэ бараа сагсанд байна', 'warning');
+      } else if (result.success) {
+        const displayName = product.nameMn || product.name || 'Бүтээгдэхүүн';
+        showToast(`${displayName} сагсанд нэмэгдлээ`, 'success');
+      }
+      
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      showToast('Алдаа гарлаа. Дахин оролдоно уу.', 'error');
+    }
   };
 
   const toggleExpandAll = () => {

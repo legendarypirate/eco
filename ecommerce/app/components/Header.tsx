@@ -315,11 +315,13 @@ const Header = () => {
                   onClick={() => router.push('/')}
                   className="flex items-center space-x-3 hover:opacity-80 transition-opacity"
                 >
-                  <div className="w-8 h-8 bg-gradient-to-br from-gray-900 to-black rounded-lg flex items-center justify-center shadow-sm">
-                    <span className="text-white font-bold">М</span>
-                  </div>
+                  <img 
+                    src="/logotsaas.jpeg" 
+                    alt="Tsaas.mn Logo" 
+                    className="w-8 h-8 rounded-lg object-cover shadow-sm"
+                  />
                   <div className="text-base font-bold text-gray-900">
-                    1018shop
+                    Tsaas.mn
                   </div>
                 </button>
               </div>

@@ -1,3 +1,5 @@
+import Image from 'next/image';
+
 const Footer = () => {
   return (
     <footer className="bg-gray-900 text-white mt-8">
@@ -7,20 +9,23 @@ const Footer = () => {
             {/* Company Info */}
             <div className="lg:col-span-2">
               <div className="flex items-center space-x-3 mb-4">
-                <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">М</span>
-                </div>
+                <Image 
+                  src="/logotsaas.jpeg" 
+                  alt="Tsaas Logo" 
+                  width={40} 
+                  height={40} 
+                  className="rounded-lg"
+                />
                 <div>
                   <h3 className="text-xl font-bold text-white">
-                    1018shop
+                    Tsaas.mn
                   </h3>
                   <p className="text-gray-400 text-xs">.mn</p>
                 </div>
               </div>
               
               <p className="text-gray-300 text-sm leading-relaxed mb-4 max-w-md">
-                Монголын онлайн дэлгүүр. Уламжлалт Монгол бүтээгдэхүүнүүдийг дэлхийн зах зээлд хүргэх.
-              </p>
+              "ПОСЫН ЦААС БӨӨНИЙ ХУДАЛДАА, КАССЫН ТОНОГ ТӨХӨӨРӨМЖИЙН ТӨВ"              </p>
               
               {/* Social Links */}
               <div className="flex space-x-3">
@@ -70,7 +75,7 @@ const Footer = () => {
                   </div>
                   <div>
                     <div className="text-gray-400 text-xs">Утас</div>
-                    <div className="text-white text-sm">+976 7000-0000</div>
+                    <div className="text-white text-sm">+976 7000-5060</div>
                   </div>
                 </li>
                 
@@ -82,7 +87,20 @@ const Footer = () => {
                   </div>
                   <div>
                     <div className="text-gray-400 text-xs">Имэйл</div>
-                    <div className="text-white text-sm">info@1018shop.mn</div>
+                    <div className="text-white text-sm">info@tsaas.mn</div>
+                  </div>
+                </li>
+                
+                <li className="flex items-start space-x-2">
+                  <div className="w-6 h-6 bg-gray-800 rounded flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-gray-400 text-xs">Хаяг</div>
+                    <div className="text-white text-sm">Улаанбаатар хот, Хан-Уул дүүрэг 2-р хороо 19 Үйлчилгээний төвөөс баруун тийш 15-р сургуулийн дэргэд</div>
                   </div>
                 </li>
               </ul>
@@ -97,7 +115,7 @@ const Footer = () => {
     <div className="flex flex-col lg:flex-row items-center justify-between gap-1 lg:gap-0">
       <div className="text-gray-400 text-center lg:text-left">
         <p className="text-xs">
-          &copy; 2025 <span className="text-white font-medium">1018 Дэлгүүр</span>
+          &copy; 2025 <span className="text-white font-medium">Tsaas.mn</span>
         </p>
       </div>
       

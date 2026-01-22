@@ -2,6 +2,10 @@ const db = require("../models");
 const Order = db.orders;
 const OrderItem = db.order_items;
 const { Op } = require("sequelize");
+const axios = require("axios");
+const PDFDocument = require("pdfkit");
+const fs = require("fs");
+const path = require("path");
 
 // Generate order number
 const generateOrderNumber = () => {
@@ -11,6 +15,64 @@ const generateOrderNumber = () => {
   const day = date.getDate().toString().padStart(2, "0");
   const random = Math.floor(1000 + Math.random() * 9000);
   return `ORD${year}${month}${day}${random}`;
+};
+
+// Helper function to call e-chuchu API
+const callChuchuAPI = async (order, options = {}) => {
+  try {
+    // Get shipping address (use provided address or order address, default to "Ирж авах" if empty)
+    const shippingAddress = options.address || order.shipping_address || 'Ирж авах';
+    
+    // Check if order has items
+    if (!order.items || order.items.length === 0) {
+      console.log(`Skipping chuchu API for order ${order.id} - no items`);
+      return { success: false, reason: 'no_items' };
+    }
+
+    // Prepare parcel info for chuchu
+    const parcelInfo = order.items.map(item => 
+      `${item.name_mn || item.name} x${item.quantity}`
+    ).join(", ");
+
+    const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
+
+    // Call chuchu API
+    const chuchuUrl = "https://e-chuchu.mn/api/v1/tsaas/delivery/create";
+    const chuchuData = {
+      order_code: order.order_number,
+      receivername: order.customer_name || options.phone || order.phone_number,
+      parcel_info: parcelInfo,
+      phone: options.phone || order.phone_number,
+      phone2: "",
+      address: shippingAddress,
+      comment: options.comment || options.khoroo || "",
+      number: totalItems,
+      price: order.grand_total.toString(),
+      track: order.id.toString()
+    };
+
+    console.log('Calling e-chuchu API for order:', order.order_number, chuchuData);
+    
+    const chuchuResponse = await axios.post(chuchuUrl, chuchuData, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 10000 // 10 second timeout
+    });
+
+    console.log('e-chuchu API response for order', order.order_number, ':', chuchuResponse.data);
+    
+    return {
+      success: true,
+      data: chuchuResponse.data
+    };
+  } catch (error) {
+    console.error('e-chuchu API error for order', order.id, ':', error.response?.data || error.message);
+    return {
+      success: false,
+      error: error.response?.data || error.message
+    };
+  }
 };
 
 // Create and Save a new Order
@@ -40,6 +102,7 @@ exports.create = (req, res) => {
       phone_number: req.body.phoneNumber || "Утасны дугаар оруулна уу",
       customer_name: req.body.customerName || "Хэрэглэгч",
       notes: req.body.notes,
+      invoice_data: req.body.invoiceData ? JSON.stringify(req.body.invoiceData) : null,
       created_at: new Date(),
       updated_at: new Date()
     };
@@ -414,4 +477,297 @@ exports.findAll = (req, res) => {
         message: err.message || "Захиалгуудыг авахад алдаа гарлаа."
       });
     });
+};
+
+// Create invoice and call chuchu API
+exports.createInvoiceWithChuchu = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { address, khoroo, phone, invoiceData } = req.body;
+
+    // Find the order
+    const order = await Order.findOne({
+      where: { id: orderId },
+      include: [{ model: OrderItem, as: "items" }]
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Захиалга олдсонгүй"
+      });
+    }
+
+    // Store invoice data in order (if available)
+    if (invoiceData) {
+      await order.update({
+        invoice_data: JSON.stringify(invoiceData),
+        updated_at: new Date()
+      });
+    }
+
+    // Note: e-chuchu API will be called when PDF is downloaded, not during invoice creation
+    // This ensures the record is created at the right time (when user downloads PDF)
+
+    // Update order payment status to indicate invoice created
+    await order.update({
+      payment_status: 1, // Mark as paid for invoice orders
+      updated_at: new Date()
+    });
+
+    res.json({
+      success: true,
+      message: "Нэхэмжлэх амжилттай үүслээ",
+      order: order
+    });
+  } catch (error) {
+    console.error("Create invoice with chuchu error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Нэхэмжлэх үүсгэхэд алдаа гарлаа"
+    });
+  }
+};
+
+// Generate invoice PDF
+exports.generateInvoicePDF = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Find the order
+    const order = await Order.findOne({
+      where: { id: id },
+      include: [{ model: OrderItem, as: "items" }]
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Захиалга олдсонгүй"
+      });
+    }
+
+    // Create PDF
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    
+    // Set response headers
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=invoice-${order.order_number}.pdf`);
+
+    // Register font that supports Cyrillic/Mongolian characters
+    // Try to use system fonts that support Cyrillic, or fallback to Helvetica
+    try {
+      // Try common system fonts that support Cyrillic
+      const fontPaths = [
+        path.join(__dirname, '../assets/fonts/DejaVuSans.ttf'),
+        path.join(__dirname, '../assets/fonts/arial.ttf'),
+        '/System/Library/Fonts/Supplemental/Arial Unicode.ttf',
+        '/System/Library/Fonts/Helvetica.ttc',
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+        '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+        'C:/Windows/Fonts/arial.ttf',
+        'C:/Windows/Fonts/arialuni.ttf',
+      ];
+      
+      let fontRegistered = false;
+      for (const fontPath of fontPaths) {
+        try {
+          if (fs.existsSync(fontPath)) {
+            doc.registerFont('CyrillicFont', fontPath);
+            doc.font('CyrillicFont');
+            fontRegistered = true;
+            break;
+          }
+        } catch (e) {
+          // Continue to next font
+          continue;
+        }
+      }
+      
+      // If no font found, use Helvetica (will show some characters but may have issues with Cyrillic)
+      if (!fontRegistered) {
+        console.warn('No Cyrillic-supporting font found, using default font. Consider adding DejaVuSans.ttf to app/assets/fonts/');
+        doc.font('Helvetica');
+      }
+    } catch (fontError) {
+      console.error('Font registration error:', fontError);
+      // Fallback to default font
+      doc.font('Helvetica');
+    }
+
+    // Pipe PDF to response
+    doc.pipe(res);
+
+    // Add content
+    doc.fontSize(20).text('НЭХЭМЖЛЭЛ', { align: 'center' });
+    doc.moveDown();
+    
+    doc.fontSize(12);
+    doc.text(`Нэхэмжлэлийн дугаар: ${order.id}`, { align: 'left' });
+    doc.text(`Захиалгын дугаар: ${order.order_number}`, { align: 'left' });
+    doc.moveDown();
+
+    // Company info
+    doc.text('Нэхэмжлэгч:', { continued: false });
+    doc.text('Байгууллагын нэр: ТЭРГҮҮН ГЭРЭГЭ ХХК', { indent: 20 });
+    doc.text('Регистерийн дугаар: 6002536', { indent: 20 });
+    doc.text('Хаяг: ХУД, 2-р хороо, Дунд Гол гудамж, Хийморь хотхон, 34 р байр', { indent: 20 });
+    doc.text('Утас: 7000-5060, 98015060', { indent: 20 });
+    doc.text('Банкны нэр: M банк', { indent: 20 });
+    doc.text('Дансны дугаар: 9006002536', { indent: 20 });
+    doc.text(`Гүйлгээний утга: ${order.order_number}`, { indent: 20 });
+    doc.moveDown();
+
+    // Customer info - use invoice data if available
+    let invoiceData = null;
+    if (order.invoice_data) {
+      try {
+        invoiceData = JSON.parse(order.invoice_data);
+      } catch (e) {
+        console.error('Error parsing invoice_data:', e);
+      }
+    }
+    
+    doc.text('Төлөгч тал:', { continued: false });
+    
+    // Only show organization name if provided in invoice data, leave blank otherwise
+    if (invoiceData?.name) {
+      doc.text(`Байгууллагын нэр: ${invoiceData.name}`, { indent: 20 });
+    } else {
+      doc.text('Байгууллагын нэр: ', { indent: 20 });
+    }
+    
+    // Only show address if not pickup
+    if (order.shipping_address && order.shipping_address !== 'Ирж авах') {
+      doc.text(`Хаяг: ${order.shipping_address}`, { indent: 20 });
+    }
+    
+    // Only show register number if available from invoice data (leave blank if not)
+    if (invoiceData?.register) {
+      doc.text(`Регистрийн дугаар: ${invoiceData.register}`, { indent: 20 });
+    } else {
+      doc.text('Регистрийн дугаар: ', { indent: 20 });
+    }
+    
+    // Show email if available from invoice data
+    if (invoiceData?.email) {
+      doc.text(`Цахим шуудан: ${invoiceData.email}`, { indent: 20 });
+    }
+    
+    doc.text(`Утас: ${invoiceData?.phone || order.phone_number}`, { indent: 20 });
+    doc.text(`Нэхэмжилсэн огноо: ${new Date(order.created_at).toLocaleDateString('mn-MN')}`, { indent: 20 });
+    doc.moveDown();
+
+    // Items table
+    let startY = doc.y;
+    doc.fontSize(10);
+    
+    // Table header
+    doc.text('№', 50, startY);
+    doc.text('Бүтээгдэхүүн', 80, startY);
+    doc.text('Үнийн дүн', 300, startY);
+    doc.text('Тоо ширхэг', 380, startY);
+    doc.text('Нийт', 450, startY);
+    
+    startY += 20;
+    doc.moveTo(50, startY).lineTo(550, startY).stroke();
+    startY += 10;
+
+    // Table rows
+    let itemNumber = 1;
+    order.items.forEach(item => {
+      const itemTotal = item.price * item.quantity;
+      doc.text(itemNumber.toString(), 50, startY);
+      doc.text(item.name_mn || item.name, 80, startY, { width: 200 });
+      doc.text(item.price.toLocaleString() + '₮', 300, startY);
+      doc.text(item.quantity.toString() + 'ш', 380, startY);
+      doc.text(itemTotal.toLocaleString() + '₮', 450, startY);
+      startY += 20;
+      itemNumber++;
+    });
+
+    startY += 10;
+    doc.moveTo(50, startY).lineTo(550, startY).stroke();
+    startY += 20;
+
+    // Totals
+    doc.text('Дүн:', 350, startY);
+    doc.text(order.subtotal.toLocaleString() + '₮', 450, startY);
+    startY += 20;
+
+    if (order.shipping_cost > 0) {
+      doc.text('Хүргэлт:', 350, startY);
+      doc.text(order.shipping_cost.toLocaleString() + '₮', 450, startY);
+      startY += 20;
+    }
+
+    doc.fontSize(12);
+    doc.text('Нийт дүн:', 350, startY);
+    doc.text(order.grand_total.toLocaleString() + '₮', 450, startY);
+
+    // Call e-chuchu API when PDF is downloaded (for all orders including pickup)
+    // Call asynchronously so it doesn't block PDF generation
+    callChuchuAPI(order).then(result => {
+      if (result.success) {
+        console.log('e-chuchu record created successfully when PDF was downloaded for order:', order.order_number);
+      } else {
+        console.warn('e-chuchu API call failed when PDF was downloaded for order:', order.order_number, result.error || result.reason);
+      }
+    }).catch(err => {
+      console.error('Error calling e-chuchu API when PDF was downloaded:', err);
+    });
+
+    // Finalize PDF
+    doc.end();
+
+  } catch (error) {
+    console.error("Generate PDF error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "PDF үүсгэхэд алдаа гарлаа"
+    });
+  }
+};
+
+// Call chuchu API for delivery (used after payment success)
+exports.createChuchuDelivery = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    // Find the order
+    const order = await Order.findOne({
+      where: { id: orderId },
+      include: [{ model: OrderItem, as: "items" }]
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Захиалга олдсонгүй"
+      });
+    }
+
+    // Use the helper function to call e-chuchu API (for all orders including pickup)
+    const chuchuResult = await callChuchuAPI(order);
+
+    if (!chuchuResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: "Хүргэлтийн мэдээлэл илгээхэд алдаа гарлаа",
+        error: chuchuResult.error || chuchuResult.reason
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Хүргэлтийн мэдээлэл амжилттай илгээгдлээ",
+      chuchuResponse: chuchuResult.data
+    });
+  } catch (error) {
+    console.error("Create chuchu delivery error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Хүргэлтийн мэдээлэл илгээхэд алдаа гарлаа"
+    });
+  }
 };

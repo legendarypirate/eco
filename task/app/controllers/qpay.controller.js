@@ -8,6 +8,68 @@ const QPAY_LOGIN = process.env.QPAY_LOGIN || 'KONO';
 const QPAY_PASSWORD = process.env.QPAY_PASSWORD || '8zcSjp5u';
 const QPAY_BASE_URL = 'https://merchant.qpay.mn/v2';
 
+// Helper function to call e-chuchu API
+const callChuchuAPI = async (order, options = {}) => {
+  try {
+    // Check if order has delivery address (not pickup)
+    const shippingAddress = options.address || order.shipping_address;
+    if (!shippingAddress || shippingAddress === 'Ирж авах' || shippingAddress.trim() === '') {
+      console.log(`Skipping chuchu API for order ${order.id} - pickup order or no address`);
+      return { success: false, reason: 'pickup_or_no_address' };
+    }
+
+    // Check if order has items
+    if (!order.items || order.items.length === 0) {
+      console.log(`Skipping chuchu API for order ${order.id} - no items`);
+      return { success: false, reason: 'no_items' };
+    }
+
+    // Prepare parcel info for chuchu
+    const parcelInfo = order.items.map(item => 
+      `${item.name_mn || item.name} x${item.quantity}`
+    ).join(", ");
+
+    const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
+
+    // Call chuchu API
+    const chuchuUrl = "https://e-chuchu.mn/api/v1/tsaas/delivery/create";
+    const chuchuData = {
+      order_code: order.order_number,
+      receivername: order.customer_name || options.phone || order.phone_number,
+      parcel_info: parcelInfo,
+      phone: options.phone || order.phone_number,
+      phone2: "",
+      address: shippingAddress,
+      comment: options.comment || options.khoroo || "",
+      number: totalItems,
+      price: order.grand_total.toString(),
+      track: order.id.toString()
+    };
+
+    console.log('Calling e-chuchu API for order:', order.order_number, chuchuData);
+    
+    const chuchuResponse = await axios.post(chuchuUrl, chuchuData, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 10000 // 10 second timeout
+    });
+
+    console.log('e-chuchu API response for order', order.order_number, ':', chuchuResponse.data);
+    
+    return {
+      success: true,
+      data: chuchuResponse.data
+    };
+  } catch (error) {
+    console.error('e-chuchu API error for order', order.id, ':', error.response?.data || error.message);
+    return {
+      success: false,
+      error: error.response?.data || error.message
+    };
+  }
+};
+
 // Get QPay access token
 async function getQPayToken() {
   try {
@@ -183,6 +245,22 @@ exports.checkPaymentStatus = async (req, res) => {
         updated_at: new Date()
       });
       order.payment_status = 1;
+
+      // Call e-chuchu API for delivery orders after payment success
+      // Reload order with items for chuchu API call
+      const orderWithItems = await Order.findOne({
+        where: { id: order.id },
+        include: [{ model: OrderItem, as: 'items' }]
+      });
+
+      if (orderWithItems) {
+        const chuchuResult = await callChuchuAPI(orderWithItems);
+        if (chuchuResult.success) {
+          console.log(`e-chuchu API called successfully for order ${order.id} after QPay payment`);
+        } else if (chuchuResult.reason !== 'pickup_or_no_address') {
+          console.warn(`e-chuchu API call failed for order ${order.id}:`, chuchuResult.error);
+        }
+      }
     }
 
     res.json({
@@ -236,6 +314,21 @@ exports.paymentWebhook = async (req, res) => {
         updated_at: new Date()
       });
       console.log(`Order ${order.id} marked as paid via webhook`);
+
+      // Call e-chuchu API for delivery orders after payment success via webhook
+      const orderWithItems = await Order.findOne({
+        where: { id: order.id },
+        include: [{ model: OrderItem, as: 'items' }]
+      });
+
+      if (orderWithItems) {
+        const chuchuResult = await callChuchuAPI(orderWithItems);
+        if (chuchuResult.success) {
+          console.log(`e-chuchu API called successfully for order ${order.id} via QPay webhook`);
+        } else if (chuchuResult.reason !== 'pickup_or_no_address') {
+          console.warn(`e-chuchu API call failed for order ${order.id} via webhook:`, chuchuResult.error);
+        }
+      }
     } else if (payment_status === 'CANCELLED' && order.payment_status !== 2) {
       await order.update({ 
         payment_status: 2, // 2 = Failed/Cancelled

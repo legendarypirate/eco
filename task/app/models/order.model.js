@@ -84,6 +84,11 @@ module.exports = (sequelize, Sequelize) => {
             allowNull: true,
             comment: "QPay QR code text"
         },
+        invoice_data: {
+            type: Sequelize.TEXT,
+            allowNull: true,
+            comment: "JSON string containing invoice-specific data (name, register, email, phone)"
+        },
         created_at: {
             type: Sequelize.DATE,
             defaultValue: Sequelize.NOW

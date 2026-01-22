@@ -117,8 +117,10 @@ export const CartProvider = ({ children }: CartProviderProps) => {
 
   const addToCart = (item: CartItem): AddToCartResult => {
     // Check if item already exists in current cart state BEFORE updating
+    // Compare by product ID and variation attributes, not cart item ID
+    // since different pages may create different cart item IDs for the same product
     const existingItem = cartItems.find(cartItem => 
-      String(cartItem.id) === String(item.id) && 
+      String(cartItem.product.id) === String(item.product.id) && 
       cartItem.selectedSize === item.selectedSize &&
       cartItem.selectedColor === item.selectedColor
     );

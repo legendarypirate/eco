@@ -1,0 +1,261 @@
+"use client";
+
+import { ArrowLeft, CreditCard, QrCode, Wallet, CheckCircle } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
+import { Button } from '@/app/components/ui/button';
+import { RadioGroup, RadioGroupItem } from '@/app/components/ui/radio-group';
+import { Label } from '@/app/components/ui/label';
+import PaymentAppLink from './PaymentAppLink';
+
+interface Step2ContentProps {
+  paymentMethod: string;
+  setPaymentMethod: (method: string) => void;
+  isProcessing: boolean;
+  qrCode: string;
+  qrText: string;
+  paymentUrls: any[];
+  paymentStatus: 'pending' | 'paid' | 'failed';
+  orderNumber: string;
+  total: number;
+  formatPrice: (price: number) => string;
+  completeOrder: () => Promise<void>;
+  setStep: (step: number) => void;
+}
+
+const Step2Content = ({
+  paymentMethod,
+  setPaymentMethod,
+  isProcessing,
+  qrCode,
+  qrText,
+  paymentUrls,
+  paymentStatus,
+  orderNumber,
+  total,
+  formatPrice,
+  completeOrder,
+  setStep
+}: Step2ContentProps) => {
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Төлбөрийн арга</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {/* Payment Method Selection */}
+          <div className="mb-8">
+            <RadioGroup
+              value={paymentMethod}
+              onValueChange={setPaymentMethod}
+              className="grid grid-cols-1 md:grid-cols-3 gap-4"
+            >
+              <label
+                htmlFor="qpay"
+                className={`flex flex-col items-center justify-center rounded-lg border-2 bg-white p-4 hover:bg-gray-50 cursor-pointer transition-all ${
+                  paymentMethod === 'qpay' 
+                    ? 'border-gray-900 bg-gray-50 ring-2 ring-gray-900 ring-opacity-20' 
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <RadioGroupItem value="qpay" id="qpay" className="sr-only" />
+                <QrCode className={`w-8 h-8 mb-2 ${paymentMethod === 'qpay' ? 'text-gray-900' : 'text-gray-400'}`} />
+                <div className="font-medium">QPay</div>
+                <div className="text-xs text-gray-500 mt-1">QR код, апп</div>
+              </label>
+              <label
+                htmlFor="card"
+                className={`flex flex-col items-center justify-center rounded-lg border-2 bg-white p-4 hover:bg-gray-50 cursor-pointer transition-all ${
+                  paymentMethod === 'card' 
+                    ? 'border-gray-900 bg-gray-50 ring-2 ring-gray-900 ring-opacity-20' 
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <RadioGroupItem value="card" id="card" className="sr-only" />
+                <CreditCard className={`w-8 h-8 mb-2 ${paymentMethod === 'card' ? 'text-gray-900' : 'text-gray-400'}`} />
+                <div className="font-medium">Карт</div>
+                <div className="text-xs text-gray-500 mt-1">Visa, Mastercard</div>
+              </label>
+              <label
+                htmlFor="bank"
+                className={`flex flex-col items-center justify-center rounded-lg border-2 bg-white p-4 hover:bg-gray-50 cursor-pointer transition-all ${
+                  paymentMethod === 'bank' 
+                    ? 'border-gray-900 bg-gray-50 ring-2 ring-gray-900 ring-opacity-20' 
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <RadioGroupItem value="bank" id="bank" className="sr-only" />
+                <Wallet className={`w-8 h-8 mb-2 ${paymentMethod === 'bank' ? 'text-gray-900' : 'text-gray-400'}`} />
+                <div className="font-medium">Банкны шилжүүлэг</div>
+                <div className="text-xs text-gray-500 mt-1">Хаан, Голомт, ХХБ</div>
+              </label>
+            </RadioGroup>
+          </div>
+
+          {/* QPay Payment Section */}
+          {paymentMethod === 'qpay' && (
+            <div className="text-center py-6">
+              {isProcessing ? (
+                <div className="mb-6">
+                  <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mb-4"></div>
+                  <p className="text-gray-600">Төлбөрийн мэдээлэл бэлдэж байна...</p>
+                </div>
+              ) : (
+                <>
+                  <div className="mb-6">
+                    <p className="text-sm text-gray-600 mb-2">Төлбөрийн дүн: <span className="font-bold text-gray-900">{formatPrice(total)}</span></p>
+                    <p className="text-sm text-gray-600 mb-4">Доорх QR кодыг QPay апп-аар уншуулна уу</p>
+                    {qrCode ? (
+                      <div className="inline-block p-4 bg-white border border-gray-200 rounded-lg">
+                        <img 
+                          src={qrCode} 
+                          alt="QPay QR Code" 
+                          className="w-48 h-48 mx-auto object-contain"
+                          onError={(e) => {
+                            console.error('QR image failed to load');
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="inline-block p-4 bg-gray-100 border border-gray-200 rounded-lg">
+                        <div className="w-48 h-48 flex items-center justify-center">
+                          <QrCode className="w-24 h-24 text-gray-400" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {qrText && (
+                    <div className="mb-6">
+                      <p className="text-sm text-gray-600 mb-2">Эсвэл QPay апп-аар доорх дугаарыг оруулна уу:</p>
+                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                        <code className="text-lg font-mono font-bold text-gray-900 break-all">
+                          {qrText}
+                        </code>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Mobile App Links */}
+                  {paymentUrls.length > 0 && (
+                    <div className="mb-6 md:hidden">
+                      <p className="text-sm text-gray-600 mb-3">Төлбөр төлөх:</p>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                        {paymentUrls.map((url, index) => (
+                          <PaymentAppLink key={index} url={url} index={index} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Payment Status */}
+                  {paymentStatus === 'paid' ? (
+                    <Card className="bg-green-50 border-green-200 mb-6">
+                      <CardContent className="pt-6">
+                        <div className="flex items-center gap-3">
+                          <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                          <div className="text-sm text-green-800">
+                            <p className="font-medium">Төлбөр амжилттай төлөгдлөө!</p>
+                            <p className="text-xs mt-1">Захиалга баталгаажуулж байна...</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <Card className="bg-blue-50 border-blue-200 mb-6">
+                      <CardContent className="pt-6">
+                        <div className="flex items-center gap-3">
+                          <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin flex-shrink-0"></div>
+                          <div className="text-sm text-blue-800">
+                            <p className="font-medium">Төлбөрийн статус автоматаар шалгаж байна...</p>
+                            <p className="text-xs mt-1">Төлбөр төлсний дараа автоматаар баталгаажуулах болно.</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+          
+          {/* Bank Transfer Section */}
+          {paymentMethod === 'bank' && (
+            <div className="py-6">
+              <div className="max-w-lg mx-auto">
+                <div className="space-y-4">
+                  <Card className="bg-blue-50 border-blue-200">
+                    <CardContent className="pt-6">
+                      <h3 className="font-bold text-gray-900 mb-2">Хаан банк</h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Дансны дугаар:</span>
+                          <span className="font-mono font-bold">5012345678</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Дансны нэр:</span>
+                          <span className="font-medium">1018shop LLC</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Гүйлгээний утга:</span>
+                          <span className="font-medium">{orderNumber}</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="bg-green-50 border-green-200">
+                    <CardContent className="pt-6">
+                      <h3 className="font-bold text-gray-900 mb-2">Голомт банк</h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Дансны дугаар:</span>
+                          <span className="font-mono font-bold">4012345678</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Дансны нэр:</span>
+                          <span className="font-medium">1018shop LLC</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Гүйлгээний утга:</span>
+                          <span className="font-medium">{orderNumber}</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Navigation Buttons */}
+          <div className="border-t border-gray-200 pt-6 mt-6">
+            <div className="flex flex-col sm:flex-row justify-between gap-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setStep(1)}
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Буцах
+              </Button>
+              
+              {paymentMethod === 'bank' && (
+                <Button
+                  type="button"
+                  onClick={completeOrder}
+                  variant="default"
+                >
+                  Гүйлгээ хийсэн
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default Step2Content;

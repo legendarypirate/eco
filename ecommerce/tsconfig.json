@@ -17,6 +17,7 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
+    "types": [],
     "plugins": [
       {
         "name": "next"
@@ -30,12 +31,15 @@
   },
   "include": [
     "next-env.d.ts",
+    "app/types/**/*.ts",
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    ".next/dev",
+    ".next/cache"
   ]
 }

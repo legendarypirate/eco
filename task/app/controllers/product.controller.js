@@ -921,22 +921,54 @@ exports.uploadImage = async (req, res) => {
 
 // Delete a Product with the specified id
 exports.delete = async (req, res) => {
+  const transaction = await db.sequelize.transaction();
   try {
     const id = req.params.id;
 
-    // First delete related variations
+    // Delete all related records in the correct order
+    // 1. Delete cart items (references product)
+    await db.cart_items.destroy({
+      where: { productId: id },
+      transaction
+    });
+
+    // 2. Delete reviews (references product)
+    await db.reviews.destroy({
+      where: { productId: id },
+      transaction
+    });
+
+    // 3. Delete product favorites (references product)
+    await db.productFavorites.destroy({
+      where: { productId: id },
+      transaction
+    });
+
+    // 4. Delete product categories (references product)
+    await db.productCategories.destroy({
+      where: { productId: id },
+      transaction
+    });
+
+    // 5. Delete product variations (references product)
     await db.product_variations.destroy({
-      where: { productId: id }
+      where: { productId: id },
+      transaction
     });
 
-    // Then delete color options
+    // 6. Delete color options (references product)
     await db.color_options.destroy({
-      where: { productId: id }
+      where: { productId: id },
+      transaction
     });
 
+    // 7. Finally delete the product itself
     const deleted = await Product.destroy({
-      where: { id: id }
+      where: { id: id },
+      transaction
     });
+
+    await transaction.commit();
 
     if (deleted) {
       res.send({
@@ -948,8 +980,16 @@ exports.delete = async (req, res) => {
       });
     }
   } catch (err) {
+    await transaction.rollback();
+    console.error('Error deleting product:', err);
+    console.error('Error details:', {
+      message: err.message,
+      name: err.name,
+      stack: err.stack
+    });
     res.status(500).send({
-      message: "Could not delete Product with id=" + req.params.id
+      message: "Could not delete Product with id=" + req.params.id,
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
   }
 };

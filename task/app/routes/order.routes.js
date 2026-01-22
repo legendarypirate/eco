@@ -31,5 +31,14 @@ module.exports = app => {
   // Update payment status
   router.patch("/:id/payment", orders.updatePaymentStatus);
 
+  // Create invoice with chuchu integration
+  router.post("/:orderId/invoice/chuchu", orders.createInvoiceWithChuchu);
+
+  // Generate invoice PDF
+  router.get("/:id/invoice/pdf", orders.generateInvoicePDF);
+
+  // Create chuchu delivery (after payment success)
+  router.post("/:orderId/delivery/chuchu", orders.createChuchuDelivery);
+
   app.use('/api/order', router);
 };

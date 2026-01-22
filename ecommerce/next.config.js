@@ -4,9 +4,6 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react'],
   },
-  // Production optimizations
-  swcMinify: true,
-  optimizeFonts: true,
   // Ensure CSS files are included in the build
   productionBrowserSourceMaps: false,
   // Compress output
