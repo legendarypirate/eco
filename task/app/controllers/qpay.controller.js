@@ -366,13 +366,27 @@ exports.checkPaymentStatus = async (req, res) => {
         include: [{ model: OrderItem, as: 'items' }]
       });
 
-      if (orderWithItems) {
-        const chuchuResult = await callChuchuAPI(orderWithItems);
-        if (chuchuResult.success) {
-          console.log(`e-chuchu API called successfully for order ${order.id} after QPay payment`);
-        } else if (chuchuResult.reason !== 'pickup_or_no_address') {
-          console.warn(`e-chuchu API call failed for order ${order.id}:`, chuchuResult.error);
+      if (orderWithItems && orderWithItems.items && orderWithItems.items.length > 0) {
+        // Ensure we have shipping address and phone
+        if (!orderWithItems.shipping_address || orderWithItems.shipping_address.trim() === '') {
+          console.warn(`Order ${order.id} missing shipping address, skipping chuchu API`);
+        } else if (orderWithItems.shipping_address === 'Ирж авах') {
+          console.log(`Order ${order.id} is pickup order, skipping chuchu API`);
+        } else {
+          const chuchuResult = await callChuchuAPI(orderWithItems, {
+            address: orderWithItems.shipping_address,
+            phone: orderWithItems.phone_number,
+            comment: ""
+          });
+          if (chuchuResult.success) {
+            console.log(`e-chuchu API called successfully for order ${order.id} after QPay payment`);
+          } else {
+            console.warn(`e-chuchu API call failed for order ${order.id}:`, chuchuResult.error || chuchuResult.reason);
+          }
         }
+      } else {
+        console.warn(`Order ${order.id} has no items, skipping chuchu API`);
+      }
 
         // Save address when QPay payment is successful (for authenticated users, non-pickup orders)
         saveAddressFromOrder(orderWithItems).then(result => {
@@ -392,7 +406,6 @@ exports.checkPaymentStatus = async (req, res) => {
           console.error('Error saving address when QPay payment succeeded:', err);
         });
       }
-    }
 
     res.json({
       success: true,
@@ -452,13 +465,27 @@ exports.paymentWebhook = async (req, res) => {
         include: [{ model: OrderItem, as: 'items' }]
       });
 
-      if (orderWithItems) {
-        const chuchuResult = await callChuchuAPI(orderWithItems);
-        if (chuchuResult.success) {
-          console.log(`e-chuchu API called successfully for order ${order.id} via QPay webhook`);
-        } else if (chuchuResult.reason !== 'pickup_or_no_address') {
-          console.warn(`e-chuchu API call failed for order ${order.id} via webhook:`, chuchuResult.error);
+      if (orderWithItems && orderWithItems.items && orderWithItems.items.length > 0) {
+        // Ensure we have shipping address and phone
+        if (!orderWithItems.shipping_address || orderWithItems.shipping_address.trim() === '') {
+          console.warn(`Order ${order.id} missing shipping address, skipping chuchu API`);
+        } else if (orderWithItems.shipping_address === 'Ирж авах') {
+          console.log(`Order ${order.id} is pickup order, skipping chuchu API`);
+        } else {
+          const chuchuResult = await callChuchuAPI(orderWithItems, {
+            address: orderWithItems.shipping_address,
+            phone: orderWithItems.phone_number,
+            comment: ""
+          });
+          if (chuchuResult.success) {
+            console.log(`e-chuchu API called successfully for order ${order.id} via QPay webhook`);
+          } else {
+            console.warn(`e-chuchu API call failed for order ${order.id} via webhook:`, chuchuResult.error || chuchuResult.reason);
+          }
         }
+      } else {
+        console.warn(`Order ${order.id} has no items, skipping chuchu API`);
+      }
 
         // Save address when QPay payment is successful via webhook (for authenticated users, non-pickup orders)
         saveAddressFromOrder(orderWithItems).then(result => {
@@ -477,7 +504,6 @@ exports.paymentWebhook = async (req, res) => {
         }).catch(err => {
           console.error('Error saving address when QPay payment succeeded via webhook:', err);
         });
-      }
     } else if (payment_status === 'CANCELLED' && order.payment_status !== 2) {
       await order.update({ 
         payment_status: 2, // 2 = Failed/Cancelled

@@ -611,28 +611,52 @@ exports.createInvoiceWithChuchu = async (req, res) => {
       });
     }
 
-    // Store invoice data in order (if available)
-    if (invoiceData) {
-      await order.update({
-        invoice_data: JSON.stringify(invoiceData),
-        updated_at: new Date()
-      });
-    }
-
-    // Note: e-chuchu API will be called when PDF is downloaded, not during invoice creation
-    // This ensures the record is created at the right time (when user downloads PDF)
-
-    // Update order payment status to indicate invoice created
-    await order.update({
-      payment_status: 1, // Mark as paid for invoice orders
+    // Update order with address and phone if provided
+    const updateData = {
       updated_at: new Date()
-    });
+    };
+    
+    if (address) {
+      updateData.shipping_address = address;
+    }
+    
+    if (phone) {
+      updateData.phone_number = phone;
+    }
+    
+    if (invoiceData) {
+      updateData.invoice_data = JSON.stringify(invoiceData);
+    }
+    
+    // Update order payment status to indicate invoice created
+    updateData.payment_status = 1; // Mark as paid for invoice orders
+    
+    await order.update(updateData);
 
     // Reload order to get updated data
     const updatedOrder = await Order.findOne({
       where: { id: orderId },
       include: [{ model: OrderItem, as: "items" }]
     });
+
+    // Call e-chuchu API when invoice is created (with address and phone from request)
+    if (updatedOrder) {
+      const chuchuOptions = {
+        address: address || updatedOrder.shipping_address,
+        phone: phone || updatedOrder.phone_number,
+        comment: khoroo || ""
+      };
+      
+      callChuchuAPI(updatedOrder, chuchuOptions).then(result => {
+        if (result.success) {
+          console.log('e-chuchu record created successfully when invoice was created for order:', updatedOrder.order_number);
+        } else {
+          console.warn('e-chuchu API call failed when invoice was created for order:', updatedOrder.order_number, result.error || result.reason);
+        }
+      }).catch(err => {
+        console.error('Error calling e-chuchu API when invoice was created:', err);
+      });
+    }
 
     // Save address when invoice is created (PDF will be downloaded client-side right after)
     // Call asynchronously so it doesn't block the response
@@ -847,7 +871,12 @@ exports.generateInvoicePDF = async (req, res) => {
 
     // Call e-chuchu API when PDF is downloaded (for all orders including pickup)
     // Call asynchronously so it doesn't block PDF generation
-    callChuchuAPI(order).then(result => {
+    // Use order data which should already have address and phone from invoice creation
+    callChuchuAPI(order, {
+      address: order.shipping_address,
+      phone: order.phone_number,
+      comment: ""
+    }).then(result => {
       if (result.success) {
         console.log('e-chuchu record created successfully when PDF was downloaded for order:', order.order_number);
       } else {
@@ -906,10 +935,33 @@ exports.createChuchuDelivery = async (req, res) => {
       });
     }
 
+    // Check if order has items
+    if (!order.items || order.items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Захиалгад бүтээгдэхүүн байхгүй байна"
+      });
+    }
+
     // Use the helper function to call e-chuchu API (for all orders including pickup)
-    const chuchuResult = await callChuchuAPI(order);
+    const chuchuResult = await callChuchuAPI(order, {
+      address: order.shipping_address,
+      phone: order.phone_number,
+      comment: ""
+    });
 
     if (!chuchuResult.success) {
+      // Don't return error for pickup orders or no items (expected cases)
+      if (chuchuResult.reason === 'pickup_or_no_address' || chuchuResult.reason === 'no_items') {
+        return res.status(400).json({
+          success: false,
+          message: chuchuResult.reason === 'pickup_or_no_address' 
+            ? "Ирж авах захиалга эсвэл хаяг байхгүй" 
+            : "Захиалгад бүтээгдэхүүн байхгүй байна",
+          reason: chuchuResult.reason
+        });
+      }
+      
       return res.status(500).json({
         success: false,
         message: "Хүргэлтийн мэдээлэл илгээхэд алдаа гарлаа",
