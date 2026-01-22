@@ -94,17 +94,15 @@ const CheckoutPage = () => {
   // Calculate totals
   const { subtotal, shipping, total } = useMemo(() => {
     const subtotal = cartItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-    // Base price: 1000
-    const basePrice = 1000;
     
     if (formData.deliveryMethod === 'pickup' || formData.deliveryMethod === 'invoice') {
-      // Ирж авах: 1000
-      const shipping = basePrice;
+      // Ирж авах: 0
+      const shipping = 0;
       const total = subtotal + shipping;
       return { subtotal, shipping, total };
     } else {
-      // Хүргэлтээр: 1000 + 8600 (if subtotal <= 120000)
-      const shipping = subtotal > 120000 ? basePrice : basePrice + 8600;
+      // Хүргэлтээр: 8600 (or 0 if subtotal > 120000)
+      const shipping = subtotal > 120000 ? 0 : 8600;
       const total = subtotal + shipping;
       return { subtotal, shipping, total };
     }
@@ -303,11 +301,9 @@ const CheckoutPage = () => {
       }
 
       // Calculate QPay invoice amount based on delivery method
-      // Pickup (ирж авах): amount = subtotal (product price only)
-      // Delivery (хүргэлтээр): amount = 9600
-      const qpayAmount = formData.deliveryMethod === 'pickup' || formData.deliveryMethod === 'invoice' 
-        ? subtotal 
-        : 9600;
+      // Pickup (ирж авах): amount = subtotal (product price only, shipping = 0)
+      // Delivery (хүргэлтээр): amount = subtotal + 8600 (or subtotal if subtotal > 120000)
+      const qpayAmount = total;
 
       const invoiceResponse = await fetch(`${API_URL}/qpay/checkout/invoice`, {
         method: 'POST',
@@ -546,9 +542,9 @@ const CheckoutPage = () => {
         userId: isAuthenticated ? user?.id : `guest_${Date.now()}`,
         items: orderItems,
         subtotal: subtotal,
-        shippingCost: 1000, // Ирж авах: 1000
+        shippingCost: 0, // Ирж авах: 0
         tax: 0,
-        grandTotal: subtotal + 1000,
+        grandTotal: subtotal, // Ирж авах: subtotal only
         paymentMethod: 1,
         shippingAddress: fullShippingAddress,
         phoneNumber: invoiceFormData.phone || formData.phone,
@@ -621,7 +617,7 @@ const CheckoutPage = () => {
       const subtotalWithoutVat = subtotal / taxMultiplier;
       const calculatedTax = subtotalWithoutVat * taxRate;
       const totalWithTax = subtotalWithoutVat + calculatedTax; // Should equal original subtotal
-      const shippingCost = 1000; // Ирж авах: 1000
+      const shippingCost = 0; // Ирж авах: 0
       const finalTotal = totalWithTax + shippingCost;
       
       // Prepare invoice items (prices without VAT)

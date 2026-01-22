@@ -67,7 +67,7 @@ const OrderSummary = ({
             <span>Хүргэлтийн төлбөр</span>
             <span>{formatPrice(shipping)}</span>
           </div>
-          {formData.deliveryMethod === 'delivery' && shipping === 1000 && subtotal >= 120000 && (
+          {formData.deliveryMethod === 'delivery' && shipping === 0 && subtotal > 120000 && (
             <div className="text-xs text-green-600 text-right">
               * 120,000₮-с дээш хүргэлтийн нэмэлт төлбөр хөнгөлөгдсөн
             </div>
