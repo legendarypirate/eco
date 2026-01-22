@@ -10,7 +10,7 @@ const Footer = () => {
             <div className="lg:col-span-2">
               <div className="flex items-center space-x-3 mb-4">
                 <Image 
-                  src="/logotsaas.jpeg" 
+                  src="/logotsas.png" 
                   alt="Tsaas Logo" 
                   width={40} 
                   height={40} 

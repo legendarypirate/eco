@@ -57,6 +57,7 @@ interface Step1ContentProps {
   handleKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
   handleProceedToPayment: (data: any) => Promise<void>;
   handleCreateInvoice: (e?: React.MouseEvent) => Promise<void>;
+  handleDeliveryMethodChange: (deliveryMethod: string) => void;
   isAuthenticated: boolean;
   subtotal: number;
   total: number;
@@ -69,6 +70,7 @@ const Step1Content = ({
   formData,
   handleProceedToPayment,
   handleCreateInvoice,
+  handleDeliveryMethodChange,
   isAuthenticated,
   subtotal,
   total,
@@ -352,7 +354,10 @@ const Step1Content = ({
                 <FormItem className="space-y-3">
                   <FormControl>
                     <RadioGroup
-                      onValueChange={field.onChange}
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        handleDeliveryMethodChange(value);
+                      }}
                       value={field.value}
                       className="flex flex-col space-y-3"
                     >
@@ -361,7 +366,7 @@ const Step1Content = ({
                         <div className="flex-1">
                           <div className="font-medium">Хүргэлтээр</div>
                           <div className="text-sm text-gray-600 mt-1">
-                            {subtotal > 120000 ? 'Үнэгүй' : `${formatPrice(8600)}`} - 2-3 хоногт
+                            {subtotal > 120000 ? 'Үнэгүй' : `${formatPrice(5000)}`} - 2-3 хоногт
                           </div>
                           <div className="text-xs text-gray-500 mt-2">
                             Таны зааж өгсөн хаягт хүргэж өгнө

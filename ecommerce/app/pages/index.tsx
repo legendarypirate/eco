@@ -21,10 +21,10 @@ const Home: NextPage<HomeProps> = ({ products, categories }) => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Head>
-        <title>Монгол Дэлгүүр - Mongolian Online Shop</title>
+        <title>mongolia</title>
         <meta name="description" content="Монголын хамгийн анхны онлайн дэлгүүр" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" href="/logotsas.png" />
       </Head>
 
       <Header />

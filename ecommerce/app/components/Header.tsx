@@ -316,7 +316,7 @@ const Header = () => {
                   className="flex items-center space-x-3 hover:opacity-80 transition-opacity"
                 >
                   <img 
-                    src="/logotsaas.jpeg" 
+                    src="/logotsas.png" 
                     alt="Tsaas.mn Logo" 
                     className="w-8 h-8 rounded-lg object-cover shadow-sm"
                   />

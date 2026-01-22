@@ -101,8 +101,8 @@ const CheckoutPage = () => {
       const total = subtotal + shipping;
       return { subtotal, shipping, total };
     } else {
-      // Хүргэлтээр: 8600 (or 0 if subtotal > 120000)
-      const shipping = subtotal > 120000 ? 0 : 8600;
+      // Хүргэлтээр: 5000 (or 0 if subtotal > 120000)
+      const shipping = subtotal > 120000 ? 0 : 5000;
       const total = subtotal + shipping;
       return { subtotal, shipping, total };
     }
@@ -122,6 +122,11 @@ const CheckoutPage = () => {
       }
       return { ...prev, [name]: value };
     });
+  }, []);
+
+  // Handle delivery method change immediately
+  const handleDeliveryMethodChange = useCallback((deliveryMethod: string) => {
+    setFormData(prev => ({ ...prev, deliveryMethod }));
   }, []);
 
   const handleInvoiceInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -302,7 +307,7 @@ const CheckoutPage = () => {
 
       // Calculate QPay invoice amount based on delivery method
       // Pickup (ирж авах): amount = subtotal (product price only, shipping = 0)
-      // Delivery (хүргэлтээр): amount = subtotal + 8600 (or subtotal if subtotal > 120000)
+      // Delivery (хүргэлтээр): amount = subtotal + 5000 (or subtotal if subtotal > 120000)
       const qpayAmount = total;
 
       const invoiceResponse = await fetch(`${API_URL}/qpay/checkout/invoice`, {
@@ -726,6 +731,7 @@ const CheckoutPage = () => {
               handleKeyDown={handleKeyDown}
               handleProceedToPayment={handleProceedToPayment}
               handleCreateInvoice={handleCreateInvoice}
+              handleDeliveryMethodChange={handleDeliveryMethodChange}
               isAuthenticated={isAuthenticated}
               subtotal={subtotal}
               total={total}
