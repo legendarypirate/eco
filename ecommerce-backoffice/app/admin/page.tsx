@@ -144,9 +144,10 @@ export default function AdminHome() {
         activeOrders = orders.filter((o: any) => o.order_status !== 3).length;
         pendingOrders = orders.filter((o: any) => o.order_status === 0).length;
         
-        // Calculate revenue from delivered orders
+        // Calculate revenue from all paid orders (not just delivered ones)
+        // This includes orders that are paid but may still be processing or shipped
         revenue = orders
-          .filter((o: any) => o.order_status === 2 && o.payment_status === 1)
+          .filter((o: any) => o.payment_status === 1)
           .reduce((sum: number, o: any) => sum + (parseFloat(o.grand_total) || 0), 0);
 
         // Get recent orders (last 4)
@@ -299,7 +300,7 @@ export default function AdminHome() {
           <CardContent>
             <div className="text-2xl font-bold">{formatPrice(stats.revenue)}</div>
             <p className="text-xs text-purple-600">
-              Хүргэгдсэн захиалгууд
+              Төлөгдсөн захиалгууд
             </p>
           </CardContent>
         </Card>

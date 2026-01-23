@@ -408,20 +408,23 @@ exports.checkPaymentStatus = async (req, res) => {
       });
 
       if (orderWithItems && orderWithItems.items && orderWithItems.items.length > 0) {
-        // Ensure we have shipping address and phone
-        if (!orderWithItems.shipping_address || orderWithItems.shipping_address.trim() === '') {
-          console.warn(`Order ${order.id} missing shipping address, skipping chuchu API`);
-        } else if (orderWithItems.shipping_address === 'Ирж авах') {
-          console.log(`Order ${order.id} is pickup order, skipping chuchu API`);
+        // Call e-chuchu API for delivery orders after payment success
+        // Only skip if it's explicitly a pickup order or address is missing
+        const shippingAddress = orderWithItems.shipping_address || '';
+        if (!shippingAddress || shippingAddress === 'Ирж авах' || shippingAddress.trim() === '') {
+          console.log(`Order ${order.id} is pickup order or has no address, skipping chuchu API. Will try again when invoice is downloaded.`);
         } else {
+          // Call chuchu API with the address from the order
           const chuchuResult = await callChuchuAPI(orderWithItems, {
-            address: orderWithItems.shipping_address,
-            phone: orderWithItems.phone_number,
+            address: shippingAddress,
+            phone: orderWithItems.phone_number || '',
             comment: ""
           });
           if (chuchuResult.success) {
             console.log(`e-chuchu API called successfully for order ${order.id} after QPay payment`);
           } else {
+            // Log warning but don't fail the payment - chuchu API call is not critical
+            // It will be retried when invoice is downloaded
             console.warn(`e-chuchu API call failed for order ${order.id}:`, chuchuResult.error || chuchuResult.reason);
           }
         }
@@ -516,20 +519,23 @@ exports.paymentWebhook = async (req, res) => {
       });
 
       if (orderWithItems && orderWithItems.items && orderWithItems.items.length > 0) {
-        // Ensure we have shipping address and phone
-        if (!orderWithItems.shipping_address || orderWithItems.shipping_address.trim() === '') {
-          console.warn(`Order ${order.id} missing shipping address, skipping chuchu API`);
-        } else if (orderWithItems.shipping_address === 'Ирж авах') {
-          console.log(`Order ${order.id} is pickup order, skipping chuchu API`);
+        // Call e-chuchu API for delivery orders after payment success via webhook
+        // Only skip if it's explicitly a pickup order or address is missing
+        const shippingAddress = orderWithItems.shipping_address || '';
+        if (!shippingAddress || shippingAddress === 'Ирж авах' || shippingAddress.trim() === '') {
+          console.log(`Order ${order.id} is pickup order or has no address, skipping chuchu API. Will try again when invoice is downloaded.`);
         } else {
+          // Call chuchu API with the address from the order
           const chuchuResult = await callChuchuAPI(orderWithItems, {
-            address: orderWithItems.shipping_address,
-            phone: orderWithItems.phone_number,
+            address: shippingAddress,
+            phone: orderWithItems.phone_number || '',
             comment: ""
           });
           if (chuchuResult.success) {
             console.log(`e-chuchu API called successfully for order ${order.id} via QPay webhook`);
           } else {
+            // Log warning but don't fail the payment - chuchu API call is not critical
+            // It will be retried when invoice is downloaded
             console.warn(`e-chuchu API call failed for order ${order.id} via webhook:`, chuchuResult.error || chuchuResult.reason);
           }
         }
@@ -614,6 +620,101 @@ exports.getOrderByInvoice = async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to get order',
+      message: error.message
+    });
+  }
+};
+
+// Get all QPay payments (orders with invoice_id)
+exports.getAllPayments = async (req, res) => {
+  try {
+    const { Op } = require('sequelize');
+    const { page = 1, limit = 1000, status } = req.query;
+    const offset = (page - 1) * limit;
+
+    const whereCondition = {
+      [Op.and]: [
+        { invoice_id: { [Op.ne]: null } },
+        { invoice_id: { [Op.ne]: '' } }
+      ]
+    };
+
+    // Map status filter to payment_status
+    if (status === 'paid') {
+      whereCondition.payment_status = 1;
+    } else if (status === 'pending') {
+      whereCondition.payment_status = 0;
+    } else if (status === 'cancelled') {
+      whereCondition.payment_status = 2;
+    }
+
+    const { count, rows } = await Order.findAndCountAll({
+      where: whereCondition,
+      include: [{ model: OrderItem, as: 'items' }],
+      order: [['created_at', 'DESC']],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      attributes: {
+        exclude: ['qr_image'] // Exclude large qr_image to save memory
+      }
+    });
+
+    // Map orders to QPay payment format
+    const payments = rows.map(order => {
+      const orderData = order.toJSON();
+      
+      // Determine status based on payment_status and order age
+      let paymentStatus = 'pending';
+      if (orderData.payment_status === 1) {
+        paymentStatus = 'paid';
+      } else if (orderData.payment_status === 2) {
+        paymentStatus = 'cancelled';
+      } else {
+        // Check if invoice is expired (older than 30 minutes)
+        const createdAt = new Date(orderData.created_at);
+        const now = new Date();
+        const diffMinutes = (now - createdAt) / (1000 * 60);
+        if (diffMinutes > 30) {
+          paymentStatus = 'expired';
+        }
+      }
+
+      // Get description from order items
+      const description = orderData.items && orderData.items.length > 0
+        ? orderData.items.map(item => `${item.name_mn || item.name} x${item.quantity}`).join(', ')
+        : 'Захиалга';
+
+      return {
+        id: orderData.id.toString(),
+        invoice_id: orderData.invoice_id || orderData.order_number,
+        amount: parseFloat(orderData.grand_total) || 0,
+        status: paymentStatus,
+        description: description,
+        customer_name: orderData.customer_name || 'Хэрэглэгч',
+        customer_phone: orderData.phone_number || '',
+        created_at: orderData.created_at ? new Date(orderData.created_at).toLocaleString('mn-MN') : '',
+        paid_at: orderData.payment_status === 1 && orderData.updated_at 
+          ? new Date(orderData.updated_at).toLocaleString('mn-MN') 
+          : null,
+        qpay_invoice_id: orderData.invoice_id || '',
+        payment_url: orderData.invoice_id ? `https://qpay.mn/pay/${orderData.invoice_id}` : '',
+        qr_image: orderData.qr_text ? `data:image/png;base64,${orderData.qr_text}` : '/api/placeholder/100/100',
+        order_number: orderData.order_number
+      };
+    });
+
+    res.json({
+      success: true,
+      payments: payments,
+      total: count,
+      page: parseInt(page),
+      totalPages: Math.ceil(count / limit)
+    });
+  } catch (error) {
+    console.error('Get all QPay payments error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get payments',
       message: error.message
     });
   }

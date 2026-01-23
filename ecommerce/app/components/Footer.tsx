@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import { useEffect, useState } from 'react';
 
 interface SocialLink {
@@ -123,7 +122,7 @@ const Footer = () => {
             {/* Company Info */}
             <div className="lg:col-span-2">
               <div className="flex items-center space-x-3 mb-4">
-                <Image 
+                <img 
                   src={footerData.logoUrl || "/logotsas.png"} 
                   alt={`${footerData.companyName} Logo`} 
                   width={40} 

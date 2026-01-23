@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,70 +55,57 @@ type QPayPayment = {
 };
 
 export default function QPayPaymentList() {
-  const [payments, setPayments] = useState<QPayPayment[]>([
-    {
-      id: "1",
-      invoice_id: "INV-2024-001",
-      amount: 150000,
-      status: "paid",
-      description: "iPhone 15 Pro худалдан авалт",
-      customer_name: "Бат",
-      customer_phone: "99999999",
-      created_at: "2024-01-15 14:30:00",
-      paid_at: "2024-01-15 14:35:00",
-      qpay_invoice_id: "QPAY-INV-001",
-      payment_url: "https://qpay.mn/pay/001",
-      qr_image: "/api/placeholder/100/100"
-    },
-    {
-      id: "2",
-      invoice_id: "INV-2024-002",
-      amount: 75000,
-      status: "pending",
-      description: "AirPods Pro 2",
-      customer_name: "Сараа",
-      customer_phone: "88888888",
-      created_at: "2024-01-15 15:20:00",
-      paid_at: null,
-      qpay_invoice_id: "QPAY-INV-002",
-      payment_url: "https://qpay.mn/pay/002",
-      qr_image: "/api/placeholder/100/100"
-    },
-    {
-      id: "3",
-      invoice_id: "INV-2024-003",
-      amount: 420000,
-      status: "expired",
-      description: "Samsung S24 Ultra",
-      customer_name: "Төгс",
-      customer_phone: "77777777",
-      created_at: "2024-01-14 10:15:00",
-      paid_at: null,
-      qpay_invoice_id: "QPAY-INV-003",
-      payment_url: "https://qpay.mn/pay/003",
-      qr_image: "/api/placeholder/100/100"
-    },
-    {
-      id: "4",
-      invoice_id: "INV-2024-004",
-      amount: 250000,
-      status: "cancelled",
-      description: "MacBook Air",
-      customer_name: "Болд",
-      customer_phone: "66666666",
-      created_at: "2024-01-13 16:45:00",
-      paid_at: null,
-      qpay_invoice_id: "QPAY-INV-004",
-      payment_url: "https://qpay.mn/pay/004",
-      qr_image: "/api/placeholder/100/100"
-    }
-  ]);
-
+  const [payments, setPayments] = useState<QPayPayment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedPayment, setSelectedPayment] = useState<QPayPayment | null>(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+  const getAuthToken = () => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('token');
+    }
+    return null;
+  };
+
+  useEffect(() => {
+    fetchPayments();
+  }, [statusFilter]);
+
+  const fetchPayments = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const token = getAuthToken();
+      
+      const statusParam = statusFilter !== 'all' ? `&status=${statusFilter}` : '';
+      const response = await fetch(`${API_URL}/api/qpay/all?page=1&limit=1000${statusParam}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
+
+      if (!response.ok) {
+        throw new Error('Төлбөрийн мэдээлэл авахад алдаа гарлаа');
+      }
+
+      const data = await response.json();
+      if (data.success && data.payments) {
+        setPayments(data.payments);
+      } else {
+        setPayments([]);
+      }
+    } catch (err) {
+      console.error('Error fetching payments:', err);
+      setError(err instanceof Error ? err.message : 'Төлбөрийн мэдээлэл авахад алдаа гарлаа');
+      setPayments([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const statusOptions = [
     { value: "all", label: "Бүх төлөв" },
@@ -153,11 +140,22 @@ export default function QPayPaymentList() {
   };
 
   const handleRefreshStatus = async (paymentId: string) => {
-    // Simulate API call to refresh payment status
-    console.log("Refreshing status for:", paymentId);
-    
-    // In real implementation, you would call your API here
-    // const updatedPayment = await refreshQPayStatus(paymentId);
+    try {
+      const token = getAuthToken();
+      const payment = payments.find(p => p.id === paymentId);
+      if (!payment || !payment.qpay_invoice_id) return;
+
+      const response = await fetch(`${API_URL}/api/qpay/check/${payment.qpay_invoice_id}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
+
+      if (response.ok) {
+        // Refresh the payments list
+        await fetchPayments();
+      }
+    } catch (err) {
+      console.error('Error refreshing payment status:', err);
+    }
   };
 
   const totalStats = {
@@ -165,6 +163,33 @@ export default function QPayPaymentList() {
     pending: payments.filter(p => p.status === "pending").length,
     total: payments.reduce((sum, p) => sum + p.amount, 0)
   };
+
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
+          <p className="text-gray-600">Төлбөрийн мэдээлэл ачаалж байна...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <XCircle className="h-5 w-5 text-red-600" />
+            <p className="text-red-800">{error}</p>
+          </div>
+          <Button onClick={fetchPayments} variant="outline">
+            Дахин оролдох
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -174,10 +199,16 @@ export default function QPayPaymentList() {
           <h1 className="text-2xl font-bold">QPay Төлбөрийн жагсаалт</h1>
           <p className="text-gray-600">QPay төлбөрийн гүйлгээний мэдээлэл</p>
         </div>
-        <Button onClick={() => setIsCreateOpen(true)} className="flex items-center gap-2">
-          <CreditCard className="h-4 w-4" />
-          Шинэ төлбөр үүсгэх
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={fetchPayments} variant="outline" className="flex items-center gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Шинэчлэх
+          </Button>
+          <Button onClick={() => setIsCreateOpen(true)} className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4" />
+            Шинэ төлбөр үүсгэх
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}

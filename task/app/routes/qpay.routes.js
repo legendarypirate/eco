@@ -13,6 +13,9 @@ module.exports = app => {
   // Get order by invoice ID
   router.get("/order/:invoiceId", qpay.getOrderByInvoice);
 
+  // Get all QPay payments (admin only)
+  router.get("/all", auth.verifyToken, qpay.getAllPayments);
+
   // Webhook endpoint for QPay payment notifications
   router.post("/webhook", qpay.paymentWebhook);
 

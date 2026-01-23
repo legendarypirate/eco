@@ -91,15 +91,15 @@ const OrderSummary = ({
         <div className="mt-6 pt-6 border-t border-gray-200 space-y-3">
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <Shield className="w-4 h-4" />
-            <span>Аюулгүй төлбөр</span>
+            <span>Төлбөрийн аюулгүй байдал</span>
           </div>
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <Truck className="w-4 h-4" />
-            <span>Хүргэлт 2-3 хоног</span>
+            <span>Хүргэлт 24 цаг</span>
           </div>
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <Clock className="w-4 h-4" />
-            <span>24/7 дэмжлэг</span>
+            <span>24/7 захиалга</span>
           </div>
         </div>
       </div>
