@@ -141,19 +141,25 @@ exports.findAll = async (req, res) => {
       }
     });
 
-    // Get all product counts by categoryId
+    // Get all product counts by categoryId - OPTIMIZED: Use COUNT query instead of loading all products
     const productCountsByCategory = {};
-    const allProducts = await db.products.findAll({
-      attributes: ['categoryId'],
-      raw: true
-    });
+    // Get unique category IDs from categories
+    const categoryIds = categories.map(cat => cat.id);
     
-    // Count products per category
-    allProducts.forEach(product => {
-      if (product.categoryId) {
-        productCountsByCategory[product.categoryId] = (productCountsByCategory[product.categoryId] || 0) + 1;
-      }
-    });
+    // Use COUNT queries for each category instead of loading all products
+    if (categoryIds.length > 0) {
+      const countPromises = categoryIds.map(async (catId) => {
+        const count = await db.products.count({
+          where: { categoryId: catId }
+        });
+        return { categoryId: catId, count };
+      });
+      
+      const countResults = await Promise.all(countPromises);
+      countResults.forEach(({ categoryId, count }) => {
+        productCountsByCategory[categoryId] = count;
+      });
+    }
 
     // Calculate productCount including child categories for each category
     const categoriesWithCount = categories.map(category => {

@@ -20,6 +20,25 @@ const generateOrderNumber = () => {
   return `ORD${year}${month}${day}${random}`;
 };
 
+// Helper function to clean order data for API responses (remove large qr_image to save memory)
+const cleanOrderData = (order) => {
+  if (!order) return null;
+  
+  const orderData = order.toJSON ? order.toJSON() : order;
+  
+  // Remove qr_image if it's a large base64 string (keep if it's a URL)
+  if (orderData.qr_image) {
+    // Only keep if it's a URL or small base64 (< 50KB)
+    if (!orderData.qr_image.startsWith('http://') && 
+        !orderData.qr_image.startsWith('https://') && 
+        orderData.qr_image.length > 50000) {
+      delete orderData.qr_image;
+    }
+  }
+  
+  return orderData;
+};
+
 // Helper function to save address from order (only for authenticated users, non-pickup orders)
 const saveAddressFromOrder = async (order) => {
   try {
@@ -253,7 +272,10 @@ exports.create = (req, res) => {
                   return Order.findOne({
                     where: { id: order.id },
                     include: [{ model: OrderItem, as: "items" }],
-                    transaction: t
+                    transaction: t,
+                    attributes: {
+                      exclude: ['qr_image'] // Exclude large qr_image from response to save memory
+                    }
                   });
                 })
                 .catch(couponError => {
@@ -262,14 +284,20 @@ exports.create = (req, res) => {
                   return Order.findOne({
                     where: { id: order.id },
                     include: [{ model: OrderItem, as: "items" }],
-                    transaction: t
+                    transaction: t,
+                    attributes: {
+                      exclude: ['qr_image'] // Exclude large qr_image from response to save memory
+                    }
                   });
                 });
             } else {
               return Order.findOne({
                 where: { id: order.id },
                 include: [{ model: OrderItem, as: "items" }],
-                transaction: t
+                transaction: t,
+                attributes: {
+                  exclude: ['qr_image'] // Exclude large qr_image from response to save memory
+                }
               });
             }
           })
@@ -278,10 +306,11 @@ exports.create = (req, res) => {
           });
       })
       .then(order => {
+        const cleanedOrder = cleanOrderData(order);
         res.json({
           success: true,
           message: "Захиалга амжилттай үүслээ!",
-          order: order
+          order: cleanedOrder
         });
       })
       .catch(err => {
@@ -314,12 +343,16 @@ exports.findAllByUserId = (req, res) => {
   Order.findAll({
     where: { user_id: userId },
     include: [{ model: OrderItem, as: "items" }],
-    order: [["created_at", "DESC"]]
+    order: [["created_at", "DESC"]],
+    attributes: {
+      exclude: ['qr_image'] // Exclude large qr_image from response to save memory
+    }
   })
     .then(data => {
+      const cleanedData = data.map(order => cleanOrderData(order));
       res.json({
         success: true,
-        orders: data
+        orders: cleanedData
       });
     })
     .catch(err => {
@@ -337,13 +370,17 @@ exports.findOne = (req, res) => {
 
   Order.findOne({
     where: { id: id },
-    include: [{ model: OrderItem, as: "items" }]
+    include: [{ model: OrderItem, as: "items" }],
+    attributes: {
+      exclude: ['qr_image'] // Exclude large qr_image from response to save memory
+    }
   })
     .then(data => {
       if (data) {
+        const cleanedData = cleanOrderData(data);
         res.json({
           success: true,
-          order: data
+          order: cleanedData
         });
       } else {
         res.status(404).json({
@@ -367,13 +404,17 @@ exports.findByOrderNumber = (req, res) => {
 
   Order.findOne({
     where: { order_number: orderNumber },
-    include: [{ model: OrderItem, as: "items" }]
+    include: [{ model: OrderItem, as: "items" }],
+    attributes: {
+      exclude: ['qr_image'] // Exclude large qr_image from response to save memory
+    }
   })
     .then(data => {
       if (data) {
+        const cleanedData = cleanOrderData(data);
         res.json({
           success: true,
-          order: data
+          order: cleanedData
         });
       } else {
         res.status(404).json({
@@ -602,12 +643,16 @@ exports.findAll = (req, res) => {
     include: [{ model: OrderItem, as: "items" }],
     order: [["created_at", "DESC"]],
     limit: parseInt(limit),
-    offset: parseInt(offset)
+    offset: parseInt(offset),
+    attributes: {
+      exclude: ['qr_image'] // Exclude large qr_image from response to save memory
+    }
   })
     .then(data => {
+      const cleanedRows = data.rows.map(order => cleanOrderData(order));
       res.json({
         success: true,
-        orders: data.rows,
+        orders: cleanedRows,
         total: data.count,
         page: parseInt(page),
         totalPages: Math.ceil(data.count / limit)
@@ -628,10 +673,13 @@ exports.createInvoiceWithChuchu = async (req, res) => {
     const { orderId } = req.params;
     const { address, khoroo, phone, invoiceData } = req.body;
 
-    // Find the order
+    // Find the order (exclude qr_image to save memory)
     const order = await Order.findOne({
       where: { id: orderId },
-      include: [{ model: OrderItem, as: "items" }]
+      include: [{ model: OrderItem, as: "items" }],
+      attributes: {
+        exclude: ['qr_image'] // Exclude large qr_image from response to save memory
+      }
     });
 
     if (!order) {
@@ -663,10 +711,13 @@ exports.createInvoiceWithChuchu = async (req, res) => {
     
     await order.update(updateData);
 
-    // Reload order to get updated data
+    // Reload order to get updated data (exclude qr_image to save memory)
     const updatedOrder = await Order.findOne({
       where: { id: orderId },
-      include: [{ model: OrderItem, as: "items" }]
+      include: [{ model: OrderItem, as: "items" }],
+      attributes: {
+        exclude: ['qr_image'] // Exclude large qr_image from response to save memory
+      }
     });
 
     // Call e-chuchu API when invoice is created (with address and phone from request)
@@ -709,10 +760,11 @@ exports.createInvoiceWithChuchu = async (req, res) => {
       });
     }
 
+    const cleanedOrder = cleanOrderData(updatedOrder || order);
     res.json({
       success: true,
       message: "Нэхэмжлэх амжилттай үүслээ",
-      order: updatedOrder || order
+      order: cleanedOrder
     });
   } catch (error) {
     console.error("Create invoice with chuchu error:", error);
@@ -728,10 +780,13 @@ exports.generateInvoicePDF = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Find the order
+    // Find the order (exclude qr_image to save memory)
     const order = await Order.findOne({
       where: { id: id },
-      include: [{ model: OrderItem, as: "items" }]
+      include: [{ model: OrderItem, as: "items" }],
+      attributes: {
+        exclude: ['qr_image'] // Exclude large qr_image from response to save memory
+      }
     });
 
     if (!order) {
@@ -807,8 +862,9 @@ exports.generateInvoicePDF = async (req, res) => {
     doc.text('Регистерийн дугаар: 6002536', { indent: 20 });
     doc.text('Хаяг: ХУД, 2-р хороо, Дунд Гол гудамж, Хийморь хотхон, 34 р байр', { indent: 20 });
     doc.text('Утас: 7000-5060, 98015060', { indent: 20 });
-    doc.text('Банкны нэр: M банк', { indent: 20 });
-    doc.text('Дансны дугаар: 9006002536', { indent: 20 });
+    doc.text('Банкны нэр: Тэргүүн гэрэгэ ххк', { indent: 20 });
+    doc.text('Дансны дугаар: 26000 500 5003966474', { indent: 20 });
+    doc.text('Дансны эзэмшигч: Idersaikhan', { indent: 20 });
     doc.text(`Гүйлгээний утга: ${order.order_number}`, { indent: 20 });
     doc.moveDown();
 
@@ -952,10 +1008,13 @@ exports.createChuchuDelivery = async (req, res) => {
   try {
     const { orderId } = req.params;
 
-    // Find the order
+    // Find the order (exclude qr_image to save memory)
     const order = await Order.findOne({
       where: { id: orderId },
-      include: [{ model: OrderItem, as: "items" }]
+      include: [{ model: OrderItem, as: "items" }],
+      attributes: {
+        exclude: ['qr_image'] // Exclude large qr_image from response to save memory
+      }
     });
 
     if (!order) {

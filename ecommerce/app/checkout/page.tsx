@@ -375,16 +375,34 @@ const CheckoutPage = () => {
       
       const qrImageValue = order?.qrImage || invoice.qr_image;
       
+      // Memory-efficient QR code handling: prefer URLs, limit base64 size
       if (qrImageValue) {
-        if (qrImageValue.startsWith('data:')) {
+        // If it's a URL, use it directly (most memory efficient)
+        if (qrImageValue.startsWith('http://') || qrImageValue.startsWith('https://')) {
           setQrCode(qrImageValue);
-        } else if (qrImageValue.startsWith('http://') || qrImageValue.startsWith('https://')) {
+        } 
+        // If it's already a data URL and small enough (< 100KB), use it
+        else if (qrImageValue.startsWith('data:') && qrImageValue.length < 100000) {
           setQrCode(qrImageValue);
-        } else {
+        }
+        // If it's base64 string and small enough (< 100KB), convert to data URL
+        else if (!qrImageValue.startsWith('data:') && qrImageValue.length < 100000) {
           setQrCode(`data:image/png;base64,${qrImageValue}`);
         }
+        // If too large, fall back to generating from qr_text (memory efficient)
+        else {
+          console.warn('QR image too large, generating from qr_text instead');
+          if (qrTextValue) {
+            setQrCode(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrTextValue)}`);
+          } else {
+            setQrCode('');
+          }
+        }
       } else if (qrTextValue) {
+        // Generate QR from text using external service (memory efficient)
         setQrCode(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrTextValue)}`);
+      } else {
+        setQrCode('');
       }
       
       if (invoice.urls && Array.isArray(invoice.urls)) {
@@ -827,9 +845,10 @@ const CheckoutPage = () => {
         issuerEmail: '',
         issuerPhone: '7000-5060, 98015060',
         issuerAddress: 'ХУД, 2-р хороо, Дунд Гол гудамж, Хийморь хотхон, 34 р байр',
-        issuerBankName: 'M банк',
-        issuerBankAccount: '9006002536',
+        issuerBankName: 'Тэргүүн гэрэгэ ххк',
+        issuerBankAccount: '26000 500 5003966474',
         issuerBankIban: '',
+        issuerBankAccountHolder: 'Idersaikhan',
         items: invoiceItems,
         subtotal: subtotalWithoutVat,
         tax: calculatedTax,

@@ -118,19 +118,33 @@ exports.create = async (req, res) => {
 
 exports.findAll = async (req, res) => {
   try {
-    const users = await User.findAll({
+    // Add pagination to prevent loading all users into memory
+    const { page = 1, limit = 50 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const maxLimit = Math.min(parseInt(limit), 100); // Cap at 100 to prevent memory issues
+
+    const { count, rows: users } = await User.findAndCountAll({
       include: [{
         model: User,
         as: 'supervisor',
         attributes: ['id', 'full_name', 'role'], // Only include needed fields
         required: false // Left join instead of inner join
       }],
-      order: [['id', 'DESC']] // Order by id in descending order
+      order: [['id', 'DESC']], // Order by id in descending order
+      limit: maxLimit,
+      offset: offset,
+      distinct: true // Important for accurate count with includes
     });
 
     res.json({
       success: true,
-      data: users
+      data: users,
+      pagination: {
+        total: count,
+        page: parseInt(page),
+        limit: maxLimit,
+        totalPages: Math.ceil(count / maxLimit)
+      }
     });
   } catch (error) {
     console.error("Error fetching users:", error);
@@ -138,12 +152,25 @@ exports.findAll = async (req, res) => {
     if (error.message && error.message.includes('operator does not exist')) {
       try {
         console.log("Retrying without supervisor include due to type mismatch...");
-        const users = await User.findAll({
-          order: [['id', 'DESC']]
+        const { page = 1, limit = 50 } = req.query;
+        const offset = (parseInt(page) - 1) * parseInt(limit);
+        const maxLimit = Math.min(parseInt(limit), 100);
+        
+        const { count, rows: users } = await User.findAndCountAll({
+          order: [['id', 'DESC']],
+          limit: maxLimit,
+          offset: offset
         });
+        
         return res.json({
           success: true,
-          data: users
+          data: users,
+          pagination: {
+            total: count,
+            page: parseInt(page),
+            limit: maxLimit,
+            totalPages: Math.ceil(count / maxLimit)
+          }
         });
       } catch (retryError) {
         console.error("Error on retry:", retryError);

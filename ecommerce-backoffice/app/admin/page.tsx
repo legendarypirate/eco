@@ -93,15 +93,15 @@ export default function AdminHome() {
       setError(null);
       const token = getAuthToken();
 
-      // Fetch all data in parallel
+      // Fetch data with pagination/limits to prevent memory issues
       const [usersRes, ordersRes, productsRes] = await Promise.all([
-        fetch(`${API_URL}/api/user/all`, {
+        fetch(`${API_URL}/api/user/all?page=1&limit=1000`, {
           headers: token ? { 'Authorization': `Bearer ${token}` } : {},
         }),
-        fetch(`${API_URL}/api/order/admin/all`, {
+        fetch(`${API_URL}/api/order/admin/all?page=1&limit=1000`, {
           headers: token ? { 'Authorization': `Bearer ${token}` } : {},
         }),
-        fetch(`${API_URL}/api/products`, {
+        fetch(`${API_URL}/api/products?page=1&limit=1000`, {
           headers: token ? { 'Authorization': `Bearer ${token}` } : {},
         }),
       ]);

@@ -79,6 +79,7 @@ interface InvoiceData {
   issuerBankName: string;
   issuerBankAccount: string;
   issuerBankIban: string;
+  issuerBankAccountHolder?: string;
   items: InvoiceItem[];
   subtotal: number; // Without VAT
   tax: number; // VAT amount
@@ -133,6 +134,12 @@ export async function generateInvoicePDF(data: InvoiceData): Promise<void> {
             <span style="font-weight: bold; min-width: 120px;">Банкны данс:</span>
             <span>${data.issuerBankName || '-'} ${data.issuerBankAccount ? '- ' + data.issuerBankAccount : ''} ${data.issuerBankIban ? '(' + data.issuerBankIban + ')' : ''}</span>
           </div>
+          ${data.issuerBankAccountHolder ? `
+          <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+            <span style="font-weight: bold; min-width: 120px;">Дансны эзэмшигч:</span>
+            <span>${data.issuerBankAccountHolder}</span>
+          </div>
+          ` : ''}
         </div>
         
         <div style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 5px; display: table-cell; width: 50%; vertical-align: top; padding-right: 0; padding-left: 15px;">

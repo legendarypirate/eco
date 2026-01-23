@@ -265,26 +265,64 @@ exports.createCheckoutInvoice = async (req, res) => {
 
     const invoiceData = invoiceResponse.data;
 
+    // Optimize QR image: Only store if it's a URL (not base64), or limit base64 size
+    let qrImageToStore = null;
+    if (invoiceData.qr_image) {
+      // If it's a URL, store it
+      if (invoiceData.qr_image.startsWith('http://') || invoiceData.qr_image.startsWith('https://')) {
+        qrImageToStore = invoiceData.qr_image;
+      } 
+      // If it's base64, only store if it's small enough (less than 50KB base64 = ~37KB image)
+      // Base64 is ~33% larger than binary, so 50KB base64 ≈ 37KB image
+      else if (invoiceData.qr_image.length < 50000) {
+        qrImageToStore = invoiceData.qr_image;
+      } else {
+        // For large base64 images, don't store - we'll use qr_text to generate QR instead
+        console.warn(`QR image too large (${invoiceData.qr_image.length} chars), not storing. Will use qr_text instead.`);
+        qrImageToStore = null;
+      }
+    }
+
     // Update order with QPay invoice information
     await order.update({
       invoice_id: invoiceData.invoice_id,
-      qr_image: invoiceData.qr_image || null,
+      qr_image: qrImageToStore,
       qr_text: invoiceData.qr_text || null,
       updated_at: new Date()
     });
 
-    // Reload order to get updated data
+    // Reload order to get updated data (exclude qr_image from response to save memory)
     const updatedOrder = await Order.findOne({
       where: { id: orderId },
-      include: [{ model: OrderItem, as: 'items' }]
+      include: [{ model: OrderItem, as: 'items' }],
+      attributes: {
+        exclude: ['qr_image'] // Exclude large qr_image from order response
+      }
     });
+
+    // Convert order to plain object and ensure qr_image is not included
+    const orderData = updatedOrder ? updatedOrder.toJSON() : null;
+    if (orderData) {
+      delete orderData.qr_image; // Ensure it's not in the response
+    }
+
+    // Only include qr_image in invoice if it's a URL or small enough
+    let qrImageForResponse = null;
+    if (invoiceData.qr_image) {
+      if (invoiceData.qr_image.startsWith('http://') || invoiceData.qr_image.startsWith('https://')) {
+        qrImageForResponse = invoiceData.qr_image;
+      } else if (invoiceData.qr_image.length < 50000) {
+        qrImageForResponse = invoiceData.qr_image;
+      }
+      // If larger, don't include - frontend will generate from qr_text
+    }
 
     res.json({
       success: true,
-      order: updatedOrder,
+      order: orderData,
       invoice: {
         invoice_id: invoiceData.invoice_id,
-        qr_image: invoiceData.qr_image,
+        qr_image: qrImageForResponse, // Only include if URL or small base64
         qr_text: invoiceData.qr_text,
         qr_code: invoiceData.qr_code,
         urls: invoiceData.urls
@@ -305,10 +343,13 @@ exports.checkPaymentStatus = async (req, res) => {
   try {
     const { invoiceId } = req.params;
 
-    // Find order by invoice ID
+    // Find order by invoice ID (exclude qr_image to save memory)
     const order = await Order.findOne({
       where: { invoice_id: invoiceId },
-      include: [{ model: OrderItem, as: 'items' }]
+      include: [{ model: OrderItem, as: 'items' }],
+      attributes: {
+        exclude: ['qr_image'] // Exclude large qr_image from response
+      }
     });
 
     if (!order) {
@@ -407,9 +448,15 @@ exports.checkPaymentStatus = async (req, res) => {
         });
     }
 
+    // Convert order to plain object and ensure qr_image is not included
+    const orderData = order ? order.toJSON() : null;
+    if (orderData) {
+      delete orderData.qr_image; // Ensure it's not in the response
+    }
+
     res.json({
       success: true,
-      order: order,
+      order: orderData,
       payment: {
         status: paymentStatus,
         isPaid,
@@ -438,9 +485,12 @@ exports.paymentWebhook = async (req, res) => {
       });
     }
 
-    // Find order by invoice ID
+    // Find order by invoice ID (exclude qr_image to save memory)
     const order = await Order.findOne({
-      where: { invoice_id: object_id }
+      where: { invoice_id: object_id },
+      attributes: {
+        exclude: ['qr_image'] // Exclude large qr_image from response
+      }
     });
 
     if (!order) {
@@ -533,10 +583,13 @@ exports.getOrderByInvoice = async (req, res) => {
   try {
     const { invoiceId } = req.params;
 
-    // Find order by invoice ID
+    // Find order by invoice ID (exclude qr_image to save memory)
     const order = await Order.findOne({
       where: { invoice_id: invoiceId },
-      include: [{ model: OrderItem, as: 'items' }]
+      include: [{ model: OrderItem, as: 'items' }],
+      attributes: {
+        exclude: ['qr_image'] // Exclude large qr_image from response
+      }
     });
 
     if (!order) {
@@ -546,9 +599,15 @@ exports.getOrderByInvoice = async (req, res) => {
       });
     }
 
+    // Convert order to plain object and ensure qr_image is not included
+    const orderData = order ? order.toJSON() : null;
+    if (orderData) {
+      delete orderData.qr_image; // Ensure it's not in the response
+    }
+
     res.json({
       success: true,
-      order: order
+      order: orderData
     });
   } catch (error) {
     console.error('Get order by invoice error:', error);

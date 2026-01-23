@@ -553,10 +553,17 @@ function ProductEditForm({ product, onCancel, onSave, isCreating = false, catego
   };
 
   const removeImage = (index: number) => {
-    setForm(prev => ({
-      ...prev,
-      images: prev.images.filter((_, i) => i !== index)
-    }));
+    setForm(prev => {
+      // Revoke blob URL to free memory
+      const imageToRemove = prev.images[index];
+      if (imageToRemove && imageToRemove.startsWith('blob:')) {
+        URL.revokeObjectURL(imageToRemove);
+      }
+      return {
+        ...prev,
+        images: prev.images.filter((_, i) => i !== index)
+      };
+    });
     setImageFiles(prev => prev.filter((_, i) => i !== index));
   };
 
@@ -646,6 +653,26 @@ function ProductEditForm({ product, onCancel, onSave, isCreating = false, catego
     }
   }, [product.id, isCreating]);
 
+  // Cleanup blob URLs on unmount to prevent memory leaks
+  useEffect(() => {
+    const formImages = form.images;
+    const infoImagesList = infoImages;
+    
+    return () => {
+      // Cleanup blob URLs when component unmounts
+      formImages.forEach(img => {
+        if (img && typeof img === 'string' && img.startsWith('blob:')) {
+          URL.revokeObjectURL(img);
+        }
+      });
+      infoImagesList.forEach(img => {
+        if (img && typeof img === 'string' && img.startsWith('blob:')) {
+          URL.revokeObjectURL(img);
+        }
+      });
+    };
+  }, [form.images, infoImages]); // Cleanup when images change or component unmounts
+
   const fetchInfoImages = async () => {
     if (!product.id) return;
     try {
@@ -693,7 +720,14 @@ function ProductEditForm({ product, onCancel, onSave, isCreating = false, catego
   };
 
   const removeInfoImage = (index: number) => {
-    setInfoImages(prev => prev.filter((_, i) => i !== index));
+    setInfoImages(prev => {
+      // Revoke blob URL to free memory
+      const imageToRemove = prev[index];
+      if (imageToRemove && imageToRemove.startsWith('blob:')) {
+        URL.revokeObjectURL(imageToRemove);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
     setInfoImageFiles(prev => prev.filter((_, i) => i !== index));
   };
 
@@ -712,9 +746,19 @@ function ProductEditForm({ product, onCancel, onSave, isCreating = false, catego
       }
 
       // Combine existing URLs (filter out blob URLs) with new uploaded URLs
-      const existingUrls = infoImages.filter(url => 
-        url.startsWith('http') && !url.startsWith('blob:')
-      );
+      // Also revoke blob URLs before filtering to free memory
+      const blobUrls: string[] = [];
+      const existingUrls = infoImages.filter(url => {
+        if (url.startsWith('blob:')) {
+          blobUrls.push(url);
+          return false;
+        }
+        return url.startsWith('http');
+      });
+      
+      // Revoke all blob URLs to free memory
+      blobUrls.forEach(url => URL.revokeObjectURL(url));
+      
       const allImageUrls = [...existingUrls, ...uploadedUrls];
 
       // Limit to 5 images max
@@ -758,9 +802,18 @@ function ProductEditForm({ product, onCancel, onSave, isCreating = false, catego
     }
 
     // Combine existing URLs (filter out blob URLs) with new uploaded URLs
-    const existingUrls = form.images.filter(url => 
-      url.startsWith('http') && !url.startsWith('blob:')
-    );
+    // Also revoke blob URLs before filtering to free memory
+    const blobUrls: string[] = [];
+    const existingUrls = form.images.filter(url => {
+      if (url.startsWith('blob:')) {
+        blobUrls.push(url);
+        return false;
+      }
+      return url.startsWith('http');
+    });
+    
+    // Revoke all blob URLs to free memory
+    blobUrls.forEach(url => URL.revokeObjectURL(url));
     
     const allImageUrls = [...existingUrls, ...uploadedImageUrls];
 
