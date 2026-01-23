@@ -260,9 +260,8 @@ useEffect(() => {
     setIsGoogleRedirecting(false);
   };
 
-  const handleMoveToWishlist = (item: any) => {
+  const handleToggleWishlist = (item: any) => {
     toggleWishlist(item.product);
-    removeFromCart(item.id);
   };
 
   const handleContinueShopping = () => {
@@ -452,13 +451,13 @@ useEffect(() => {
                               
                               <div className="flex items-center gap-2">
                                 <button
-                                  onClick={() => handleMoveToWishlist(item)}
+                                  onClick={() => handleToggleWishlist(item)}
                                   className={`transition-colors ${
                                     isInWishlist(item.product.id) 
                                       ? 'text-red-500' 
                                       : 'text-gray-400 hover:text-red-500'
                                   }`}
-                                  title="Хүслийн жагсаалтад хадгалах"
+                                  title={isInWishlist(item.product.id) ? "Хүслийн жагсаалтаас хасах" : "Хүслийн жагсаалтад нэмэх"}
                                 >
                                   <Heart className="w-4 h-4" />
                                 </button>

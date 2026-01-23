@@ -1,6 +1,8 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { 
   Users, 
   ShoppingCart, 
@@ -8,12 +10,10 @@ import {
   Package, 
   TrendingUp, 
   Eye,
-  Calendar,
-  MapPin,
   Clock,
   AlertCircle,
   CheckCircle,
-  XCircle
+  Loader2
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -26,40 +26,198 @@ const statusConfig: Record<OrderStatus, { label: string; color: string; icon: Lu
   pending: { label: 'Хүлээгдэж байна', color: 'bg-yellow-100 text-yellow-800', icon: AlertCircle },
 };
 
-// Sample data
-const dashboardData = {
-  stats: {
-    totalUsers: 128,
-    activeOrders: 52,
-    revenue: 4230000,
-    totalProducts: 89,
-    newCustomers: 12,
-    pendingOrders: 8
-  },
-  recentOrders: [
-    { id: 'ORD-1001', customer: 'Бат', amount: 150000, status: 'delivered' as OrderStatus, date: '2024-01-15' },
-    { id: 'ORD-1002', customer: 'Сараа', amount: 75000, status: 'processing' as OrderStatus, date: '2024-01-15' },
-    { id: 'ORD-1003', customer: 'Төгс', amount: 420000, status: 'shipped' as OrderStatus, date: '2024-01-14' },
-    { id: 'ORD-1004', customer: 'Болд', amount: 89000, status: 'pending' as OrderStatus, date: '2024-01-14' },
-  ],
-  topProducts: [
-    { name: 'iPhone 15 Pro', sales: 45, revenue: 67500000 },
-    { name: 'Samsung S24 Ultra', sales: 32, revenue: 48000000 },
-    { name: 'AirPods Pro 2', sales: 28, revenue: 8400000 },
-    { name: 'MacBook Air M2', sales: 18, revenue: 27000000 },
-  ],
-  userActivity: [
-    { action: 'Бүртгүүлсэн', user: 'Энхжин', time: '2 мин' },
-    { action: 'Захиалга үүсгэсэн', user: 'Бат', time: '5 мин' },
-    { action: 'Төлбөр төлсөн', user: 'Сараа', time: '12 мин' },
-    { action: 'Бараа нэмсэн', user: 'Admin', time: '25 мин' },
-  ]
-};
+interface DashboardStats {
+  totalUsers: number;
+  activeOrders: number;
+  revenue: number;
+  totalProducts: number;
+  pendingOrders: number;
+}
+
+interface RecentOrder {
+  id: string;
+  customer: string;
+  amount: number;
+  status: OrderStatus;
+  date: string;
+}
+
+interface TopProduct {
+  name: string;
+  sales: number;
+  revenue: number;
+}
 
 export default function AdminHome() {
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<DashboardStats>({
+    totalUsers: 0,
+    activeOrders: 0,
+    revenue: 0,
+    totalProducts: 0,
+    pendingOrders: 0,
+  });
+  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
+  const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+  const getAuthToken = () => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('token');
+    }
+    return null;
+  };
+
+  const mapOrderStatus = (status: number): OrderStatus => {
+    // Order status: 0 = Processing, 1 = Shipped, 2 = Delivered, 3 = Cancelled
+    if (status === 2) return 'delivered';
+    if (status === 1) return 'shipped';
+    if (status === 0) return 'processing';
+    return 'pending';
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('mn-MN');
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const token = getAuthToken();
+
+      // Fetch all data in parallel
+      const [usersRes, ordersRes, productsRes] = await Promise.all([
+        fetch(`${API_URL}/api/user/all`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        }),
+        fetch(`${API_URL}/api/order/admin/all`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        }),
+        fetch(`${API_URL}/api/products`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        }),
+      ]);
+
+      // Process users
+      let totalUsers = 0;
+      if (usersRes.ok) {
+        const usersData = await usersRes.json();
+        totalUsers = Array.isArray(usersData) ? usersData.length : (usersData.users?.length || 0);
+      }
+
+      // Process orders
+      let activeOrders = 0;
+      let pendingOrders = 0;
+      let revenue = 0;
+      const ordersList: RecentOrder[] = [];
+      
+      if (ordersRes.ok) {
+        const ordersData = await ordersRes.json();
+        const orders = ordersData.orders || ordersData.data || [];
+        
+        activeOrders = orders.filter((o: any) => o.order_status !== 3).length;
+        pendingOrders = orders.filter((o: any) => o.order_status === 0).length;
+        
+        // Calculate revenue from delivered orders
+        revenue = orders
+          .filter((o: any) => o.order_status === 2 && o.payment_status === 1)
+          .reduce((sum: number, o: any) => sum + (parseFloat(o.grand_total) || 0), 0);
+
+        // Get recent orders (last 4)
+        const recent = orders
+          .slice(0, 4)
+          .map((order: any) => ({
+            id: order.order_number || String(order.id),
+            customer: order.customer_name || 'Хэрэглэгч',
+            amount: parseFloat(order.grand_total) || 0,
+            status: mapOrderStatus(order.order_status),
+            date: order.created_at || new Date().toISOString(),
+          }));
+        ordersList.push(...recent);
+      }
+
+      // Process products
+      let totalProducts = 0;
+      const productsList: TopProduct[] = [];
+      
+      if (productsRes.ok) {
+        const productsData = await productsRes.json();
+        const products = productsData.products || productsData.data || Array.isArray(productsData) ? productsData : [];
+        totalProducts = products.length;
+
+        // Calculate top products from order items
+        // This is a simplified version - in a real app, you'd aggregate from order_items table
+        // For now, we'll show products with highest stock or most recent
+        const sortedProducts = [...products]
+          .sort((a: any, b: any) => (b.stock || 0) - (a.stock || 0))
+          .slice(0, 4)
+          .map((product: any) => ({
+            name: product.name_mn || product.name || 'Бараа',
+            sales: 0, // Would need to calculate from order_items
+            revenue: 0, // Would need to calculate from order_items
+          }));
+        productsList.push(...sortedProducts);
+      }
+
+      setStats({
+        totalUsers,
+        activeOrders,
+        revenue,
+        totalProducts,
+        pendingOrders,
+      });
+      setRecentOrders(ordersList);
+      setTopProducts(productsList);
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err);
+      setError(err instanceof Error ? err.message : 'Мэдээлэл авахад алдаа гарлаа');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('mn-MN').format(price) + '₮';
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
+          <p className="text-gray-600">Мэдээлэл ачаалж байна...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-red-600" />
+            <p className="text-red-800">{error}</p>
+          </div>
+          <Button 
+            onClick={fetchDashboardData} 
+            variant="outline" 
+            className="mt-4"
+          >
+            Дахин оролдох
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -69,11 +227,13 @@ export default function AdminHome() {
           <h1 className="text-3xl font-bold">Хянах самбар</h1>
           <p className="text-gray-600">Өнөөдрийн үйл ажиллагааны тойм</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline">Өдөр</Button>
-          <Button variant="outline">7 хоног</Button>
-          <Button variant="default">Сар</Button>
-        </div>
+        <Button 
+          variant="outline" 
+          onClick={fetchDashboardData}
+          disabled={loading}
+        >
+          Шинэчлэх
+        </Button>
       </div>
 
       {/* Main Stats Grid */}
@@ -84,9 +244,9 @@ export default function AdminHome() {
             <Users className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{dashboardData.stats.totalUsers}</div>
+            <div className="text-2xl font-bold">{stats.totalUsers}</div>
             <p className="text-xs text-blue-600">
-              +{dashboardData.stats.newCustomers} шинэ хэрэглэгч
+              Бүртгэлтэй хэрэглэгч
             </p>
           </CardContent>
         </Card>
@@ -97,9 +257,9 @@ export default function AdminHome() {
             <ShoppingCart className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{dashboardData.stats.activeOrders}</div>
+            <div className="text-2xl font-bold">{stats.activeOrders}</div>
             <p className="text-xs text-green-600">
-              {dashboardData.stats.pendingOrders} хүлээгдэж байна
+              {stats.pendingOrders} хүлээгдэж байна
             </p>
           </CardContent>
         </Card>
@@ -110,9 +270,9 @@ export default function AdminHome() {
             <DollarSign className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatPrice(dashboardData.stats.revenue)}</div>
+            <div className="text-2xl font-bold">{formatPrice(stats.revenue)}</div>
             <p className="text-xs text-purple-600">
-              +12% өмнөх сараас
+              Хүргэгдсэн захиалгууд
             </p>
           </CardContent>
         </Card>
@@ -123,72 +283,61 @@ export default function AdminHome() {
             <Package className="h-4 w-4 text-orange-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{dashboardData.stats.totalProducts}</div>
+            <div className="text-2xl font-bold">{stats.totalProducts}</div>
             <p className="text-xs text-orange-600">
-              5 шинэ бараа нэмэгдсэн
+              Нийт бараа
             </p>
           </CardContent>
         </Card>
       </div>
 
       {/* Charts and Additional Stats */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2">
         {/* Recent Orders */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <span>Сүүлийн захиалгууд</span>
-              <Button variant="ghost" size="sm">
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => window.location.href = '/admin/order'}
+              >
                 Бүгдийг харах
               </Button>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {dashboardData.recentOrders.map((order) => {
-                const StatusIcon = statusConfig[order.status].icon;
-                return (
-                  <div key={order.id} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className={`p-2 rounded-full ${statusConfig[order.status].color}`}>
-                        <StatusIcon className="h-4 w-4" />
+            {recentOrders.length > 0 ? (
+              <div className="space-y-4">
+                {recentOrders.map((order) => {
+                  const StatusIcon = statusConfig[order.status].icon;
+                  return (
+                    <div key={order.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <div className={`p-2 rounded-full ${statusConfig[order.status].color}`}>
+                          <StatusIcon className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <div className="font-medium">{order.id}</div>
+                          <div className="text-sm text-gray-500">{order.customer}</div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="font-medium">{order.id}</div>
-                        <div className="text-sm text-gray-500">{order.customer}</div>
+                      <div className="text-right">
+                        <div className="font-semibold">{formatPrice(order.amount)}</div>
+                        <div className="text-sm text-gray-500">
+                          {formatDate(order.date)}
+                        </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="font-semibold">{formatPrice(order.amount)}</div>
-                      <div className="text-sm text-gray-500">
-                        {new Date(order.date).toLocaleDateString('mn-MN')}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* User Activity */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Сүүлийн үйлдлүүд</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {dashboardData.userActivity.map((activity, index) => (
-                <div key={index} className="flex items-start space-x-3">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
-                  <div className="flex-1">
-                    <div className="font-medium">{activity.user}</div>
-                    <div className="text-sm text-gray-600">{activity.action}</div>
-                    <div className="text-xs text-gray-400">{activity.time} өмнө</div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                Захиалга байхгүй байна
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -199,30 +348,32 @@ export default function AdminHome() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <span>Чансааны бараанууд</span>
+              <span>Бараанууд</span>
               <TrendingUp className="h-5 w-5 text-green-600" />
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {dashboardData.topProducts.map((product, index) => (
-                <div key={product.name} className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                      <span className="text-sm font-bold text-blue-600">{index + 1}</span>
-                    </div>
-                    <div>
-                      <div className="font-medium">{product.name}</div>
-                      <div className="text-sm text-gray-500">{product.sales} борлуулалт</div>
+            {topProducts.length > 0 ? (
+              <div className="space-y-4">
+                {topProducts.map((product, index) => (
+                  <div key={product.name} className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                        <span className="text-sm font-bold text-blue-600">{index + 1}</span>
+                      </div>
+                      <div>
+                        <div className="font-medium">{product.name}</div>
+                        <div className="text-sm text-gray-500">Бараа</div>
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="font-semibold">{formatPrice(product.revenue)}</div>
-                    <div className="text-sm text-green-600">+{Math.floor(Math.random() * 20) + 5}%</div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                Бараа байхгүй байна
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -233,19 +384,34 @@ export default function AdminHome() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-3">
-              <Button className="h-16 flex-col gap-1">
+              <Button 
+                className="h-16 flex-col gap-1"
+                onClick={() => window.location.href = '/admin/order'}
+              >
                 <ShoppingCart className="h-5 w-5" />
-                <span className="text-xs">Захиалга үүсгэх</span>
+                <span className="text-xs">Захиалга харах</span>
               </Button>
-              <Button variant="outline" className="h-16 flex-col gap-1">
+              <Button 
+                variant="outline" 
+                className="h-16 flex-col gap-1"
+                onClick={() => window.location.href = '/admin/product'}
+              >
                 <Package className="h-5 w-5" />
                 <span className="text-xs">Бараа нэмэх</span>
               </Button>
-              <Button variant="outline" className="h-16 flex-col gap-1">
+              <Button 
+                variant="outline" 
+                className="h-16 flex-col gap-1"
+                onClick={() => window.location.href = '/admin/users'}
+              >
                 <Users className="h-5 w-5" />
-                <span className="text-xs">Хэрэглэгч нэмэх</span>
+                <span className="text-xs">Хэрэглэгч харах</span>
               </Button>
-              <Button variant="outline" className="h-16 flex-col gap-1">
+              <Button 
+                variant="outline" 
+                className="h-16 flex-col gap-1"
+                onClick={() => window.location.href = '/admin/order'}
+              >
                 <Eye className="h-5 w-5" />
                 <span className="text-xs">Тайлан харах</span>
               </Button>
@@ -253,37 +419,6 @@ export default function AdminHome() {
           </CardContent>
         </Card>
       </div>
-
-      {/* System Status */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Системийн төлөв</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center p-4 border rounded-lg">
-              <CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-2" />
-              <div className="font-semibold">Дэлгүүр</div>
-              <div className="text-sm text-green-600">Идэвхтэй</div>
-            </div>
-            <div className="text-center p-4 border rounded-lg">
-              <CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-2" />
-              <div className="font-semibold">Төлбөрийн систем</div>
-              <div className="text-sm text-green-600">Ажиллаж байна</div>
-            </div>
-            <div className="text-center p-4 border rounded-lg">
-              <CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-2" />
-              <div className="font-semibold">Сервер</div>
-              <div className="text-sm text-green-600">Хэвийн</div>
-            </div>
-            <div className="text-center p-4 border rounded-lg">
-              <Clock className="h-8 w-8 text-yellow-500 mx-auto mb-2" />
-              <div className="font-semibold">Нөөц</div>
-              <div className="text-sm text-yellow-600">75% ашиглагдсан</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

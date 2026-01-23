@@ -361,15 +361,7 @@ const Header = () => {
               {/* Action Icons */}
               <div className="flex items-center space-x-4">
                 {/* Notifications (Optional) */}
-                <button 
-                  className="relative text-gray-600 hover:text-gray-900 transition-colors"
-                  onClick={() => router.push('/notifications')}
-                >
-                  <Bell className="w-5 h-5" />
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center animate-pulse">
-                    3
-                  </span>
-                </button>
+               
 
                 {/* Wishlist */}
                 <button 
