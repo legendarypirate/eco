@@ -326,10 +326,16 @@ exports.findAll = async (req, res) => {
     
     // Search filter - search name, description, sku, and brand fields
     // IMPORTANT: Ensure name search works by placing it first and using proper operators
+    // NOTE: ILIKE with leading wildcards (%text%) cannot use indexes efficiently
+    // For better performance on large datasets, consider:
+    // 1. Adding GIN indexes for full-text search: CREATE INDEX idx_products_name_gin ON products USING gin(to_tsvector('english', name));
+    // 2. Using PostgreSQL's full-text search instead of ILIKE
+    // 3. Limiting search to indexed columns only
     if (searchTerm) {
       // Build search conditions array
       // Use Op.or to search across multiple fields
       // Note: Op.iLike is case-insensitive, so it should work for name search
+      // NOTE: Only search columns that exist in the products table (nameMn doesn't exist)
       const searchConditions = [
         { name: { [Op.iLike]: `%${searchTerm}%` } },
         { description: { [Op.iLike]: `%${searchTerm}%` } },
@@ -394,13 +400,61 @@ exports.findAll = async (req, res) => {
     }
 
     // Get price statistics for FILTERED products
-    const filteredPriceStats = await Product.findOne({
-      attributes: [
-        [sequelize.fn('MIN', sequelize.col('price')), 'minPrice'],
-        [sequelize.fn('MAX', sequelize.col('price')), 'maxPrice']
-      ],
-      where: where
-    });
+    // OPTIMIZED: Use ORDER BY with LIMIT instead of MIN/MAX aggregation to prevent memory issues
+    // This approach is more memory-efficient because:
+    // 1. It can stop after finding the first result (LIMIT 1)
+    // 2. It doesn't need to keep all matching rows in memory
+    // 3. PostgreSQL can use an index on the price column if available
+    // RECOMMENDATION: Add index on price column for better performance:
+    // CREATE INDEX idx_products_price ON products(price);
+    let filteredPriceStats = null;
+    try {
+      // For search queries with ILIKE, use a more efficient approach
+      // Instead of scanning all rows, we'll use ORDER BY with LIMIT
+      if (searchTerm && where[Op.or]) {
+        // Use separate queries for min and max to avoid memory issues
+        const minPriceResult = await Product.findOne({
+          attributes: ['price'],
+          where: where,
+          order: [['price', 'ASC']],
+          limit: 1,
+          raw: true
+        });
+        
+        const maxPriceResult = await Product.findOne({
+          attributes: ['price'],
+          where: where,
+          order: [['price', 'DESC']],
+          limit: 1,
+          raw: true
+        });
+        
+        filteredPriceStats = {
+          dataValues: {
+            minPrice: minPriceResult?.price || 0,
+            maxPrice: maxPriceResult?.price || 5000000
+          }
+        };
+      } else {
+        // For non-search queries, use aggregation (more efficient when no ILIKE)
+        filteredPriceStats = await Product.findOne({
+          attributes: [
+            [sequelize.fn('MIN', sequelize.col('price')), 'minPrice'],
+            [sequelize.fn('MAX', sequelize.col('price')), 'maxPrice']
+          ],
+          where: where
+        });
+      }
+    } catch (statsError) {
+      console.error('Error calculating price stats:', statsError);
+      // Fallback to default values if stats query fails
+      filteredPriceStats = {
+        dataValues: {
+          minPrice: 0,
+          maxPrice: 5000000
+        }
+      };
+    }
 
     // Get total count separately (without includes) to ensure accurate count
     const totalCount = await Product.count({
