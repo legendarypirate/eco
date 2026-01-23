@@ -29,7 +29,6 @@ export default function ProductDetailPage() {
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewForm, setReviewForm] = useState({
     rating: 0,
-    title: '',
     comment: '',
     hoverRating: 0
   });
@@ -414,7 +413,6 @@ const handleAddToCart = async () => {
         body: JSON.stringify({
           productId: product.id,
           rating: reviewForm.rating,
-          title: reviewForm.title.trim() || undefined,
           comment: reviewForm.comment.trim(),
           userName: user.full_name
         })
@@ -423,7 +421,7 @@ const handleAddToCart = async () => {
       if (response.ok) {
         const newReview = await response.json();
         setReviews([newReview, ...reviews]);
-        setReviewForm({ rating: 0, title: '', comment: '', hoverRating: 0 });
+        setReviewForm({ rating: 0, comment: '', hoverRating: 0 });
         setShowReviewForm(false);
         showToast('Үнэлгээ амжилттай үлдээгдлээ', 'success');
         
@@ -1009,15 +1007,15 @@ const handleAddToCart = async () => {
                 <div className="grid grid-cols-2 gap-4 text-xs">
                   <div className="flex items-center text-gray-600">
                     <Truck className="w-4 h-4 mr-2" />
-                    <span>Үнэгүй хүргэлт</span>
+                    <span>Үнэгүй хүргэлт (120к дээш)</span>
                   </div>
                   <div className="flex items-center text-gray-600">
                     <RotateCcw className="w-4 h-4 mr-2" />
-                    <span>14 хоног буцаах</span>
+                    <span>72 цаг дотор буцаалт</span>
                   </div>
                   <div className="flex items-center text-gray-600">
                     <Shield className="w-4 h-4 mr-2" />
-                    <span>2 жил гарант</span>
+                    <span>1 жилийн баталгаа</span>
                   </div>
                   <div className="flex items-center text-gray-600">
                     <Share2 className="w-4 h-4 mr-2" />
@@ -1110,7 +1108,7 @@ const handleAddToCart = async () => {
                 <button
                   onClick={() => {
                     setShowReviewForm(false);
-                    setReviewForm({ rating: 0, title: '', comment: '', hoverRating: 0 });
+                    setReviewForm({ rating: 0, comment: '', hoverRating: 0 });
                   }}
                   className="text-gray-500 hover:text-gray-700"
                 >
@@ -1154,20 +1152,6 @@ const handleAddToCart = async () => {
                 </div>
               </div>
 
-              {/* Title */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Гарчиг (сонголттой)
-                </label>
-                <input
-                  type="text"
-                  value={reviewForm.title}
-                  onChange={(e) => setReviewForm({ ...reviewForm, title: e.target.value })}
-                  placeholder="Үнэлгээний гарчиг"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
               {/* Comment */}
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1198,7 +1182,7 @@ const handleAddToCart = async () => {
                 <button
                   onClick={() => {
                     setShowReviewForm(false);
-                    setReviewForm({ rating: 0, title: '', comment: '', hoverRating: 0 });
+                    setReviewForm({ rating: 0, comment: '', hoverRating: 0 });
                   }}
                   className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
                 >

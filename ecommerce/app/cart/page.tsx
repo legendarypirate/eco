@@ -676,20 +676,13 @@ useEffect(() => {
               <div className="space-y-3 border-t border-gray-200 pt-6">
                 <div className="flex items-center gap-3 text-sm text-gray-600">
                   <Truck className="w-4 h-4 text-green-600" />
-                  <span>100,000₮-с дээш үнэгүй хүргэлт</span>
+                  <span>120,000₮-с дээш үнэгүй хүргэлт</span>
                 </div>
                 <div className="flex items-center gap-3 text-sm text-gray-600">
                   <CreditCard className="w-4 h-4 text-blue-600" />
                   <span>Карт, QPay, банкны шилжүүлэг</span>
                 </div>
-                <div className="flex items-center gap-3 text-sm text-gray-600">
-                  <Shield className="w-4 h-4 text-purple-600" />
-                  <span>Аюулгүй төлбөр</span>
-                </div>
-                <div className="flex items-center gap-3 text-sm text-gray-600">
-                  <User className="w-4 h-4 text-orange-600" />
-                  <span>Нэвтэрсэн хэрэглэгчдэд онцгой санал</span>
-                </div>
+              
               </div>
               
               {/* Continue Shopping */}
