@@ -110,7 +110,17 @@ export default function AdminHome() {
       let totalUsers = 0;
       if (usersRes.ok) {
         const usersData = await usersRes.json();
-        totalUsers = Array.isArray(usersData) ? usersData.length : (usersData.users?.length || 0);
+        let users: any[] = [];
+        
+        if (Array.isArray(usersData)) {
+          users = usersData;
+        } else if (Array.isArray(usersData.users)) {
+          users = usersData.users;
+        } else if (Array.isArray(usersData.data)) {
+          users = usersData.data;
+        }
+        
+        totalUsers = users.length;
       }
 
       // Process orders
@@ -121,7 +131,15 @@ export default function AdminHome() {
       
       if (ordersRes.ok) {
         const ordersData = await ordersRes.json();
-        const orders = ordersData.orders || ordersData.data || [];
+        let orders: any[] = [];
+        
+        if (Array.isArray(ordersData)) {
+          orders = ordersData;
+        } else if (Array.isArray(ordersData.orders)) {
+          orders = ordersData.orders;
+        } else if (Array.isArray(ordersData.data)) {
+          orders = ordersData.data;
+        }
         
         activeOrders = orders.filter((o: any) => o.order_status !== 3).length;
         pendingOrders = orders.filter((o: any) => o.order_status === 0).length;
@@ -150,7 +168,16 @@ export default function AdminHome() {
       
       if (productsRes.ok) {
         const productsData = await productsRes.json();
-        const products = productsData.products || productsData.data || Array.isArray(productsData) ? productsData : [];
+        let products: any[] = [];
+        
+        if (Array.isArray(productsData)) {
+          products = productsData;
+        } else if (Array.isArray(productsData.products)) {
+          products = productsData.products;
+        } else if (Array.isArray(productsData.data)) {
+          products = productsData.data;
+        }
+        
         totalProducts = products.length;
 
         // Calculate top products from order items
