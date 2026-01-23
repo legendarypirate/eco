@@ -8,10 +8,17 @@ import { AuthProvider } from './context/AuthContext';
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "mongolia",
+  title: {
+    default: "Нүүр хуудас",
+    template: "%s | TSAAS"
+  },
   description: "E-commerce app",
   icons: {
-    icon: "/logotsas.png",
+    icon: [
+      { url: "/logotsas.png", type: "image/png" },
+    ],
+    shortcut: "/logotsas.png",
+    apple: "/logotsas.png",
   },
 };
 

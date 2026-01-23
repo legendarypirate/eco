@@ -88,6 +88,10 @@ const ProductListPageContent = () => {
   const router = useRouter();
   const { addToCart } = useCart();
   const categoryId = searchParams.get('category') || 'all';
+
+  useEffect(() => {
+    document.title = 'Дэлгүүр | TSAAS';
+  }, []);
   
   const [selectedCategory, setSelectedCategory] = useState<string>(categoryId);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());

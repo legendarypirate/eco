@@ -132,6 +132,7 @@ const MyPage = () => {
 
   useEffect(() => {
     setIsClient(true);
+    document.title = 'Миний хуудас | TSAAS';
   }, []);
 
   // Load data from localStorage

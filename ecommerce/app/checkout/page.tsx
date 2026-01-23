@@ -62,6 +62,10 @@ const CheckoutPage = () => {
     deliveryMethod: 'delivery',
   });
 
+  useEffect(() => {
+    document.title = 'Төлбөр төлөх | TSAAS';
+  }, []);
+
   // Pre-fill user data if authenticated
   useEffect(() => {
     if (user && isAuthenticated && !hasPrefilledRef.current) {
@@ -93,22 +97,39 @@ const CheckoutPage = () => {
     setOrderNumber(generateOrderNumber());
   }, []);
 
+  // Load applied coupon from localStorage
+  const [appliedCoupon, setAppliedCoupon] = useState<{code: string, discount: number, coupon_id: number} | null>(null);
+  
+  useEffect(() => {
+    const savedCoupon = localStorage.getItem('appliedCoupon');
+    if (savedCoupon) {
+      try {
+        setAppliedCoupon(JSON.parse(savedCoupon));
+      } catch (error) {
+        console.error('Error parsing coupon from localStorage:', error);
+        localStorage.removeItem('appliedCoupon');
+      }
+    }
+  }, []);
+
   // Calculate totals
-  const { subtotal, shipping, total } = useMemo(() => {
+  const { subtotal, shipping, couponDiscount, total } = useMemo(() => {
     const subtotal = cartItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
     
+    let shipping = 0;
     if (formData.deliveryMethod === 'pickup' || formData.deliveryMethod === 'invoice') {
       // Ирж авах: 0
-      const shipping = 0;
-      const total = subtotal + shipping;
-      return { subtotal, shipping, total };
+      shipping = 0;
     } else {
       // Хүргэлтээр: 5000 (or 0 if subtotal > 120000)
-      const shipping = subtotal > 120000 ? 0 : 5000;
-      const total = subtotal + shipping;
-      return { subtotal, shipping, total };
+      shipping = subtotal > 120000 ? 0 : 5000;
     }
-  }, [cartItems, formData.deliveryMethod]);
+    
+    const couponDiscount = appliedCoupon?.discount || 0;
+    const total = subtotal + shipping - couponDiscount;
+    
+    return { subtotal, shipping, couponDiscount, total };
+  }, [cartItems, formData.deliveryMethod, appliedCoupon]);
 
   const formatPrice = useCallback((price: number) => {
     return price.toLocaleString() + '₮';
@@ -276,6 +297,8 @@ const CheckoutPage = () => {
         phoneNumber: formData.phone,
         customerName: `${formData.firstName} ${formData.lastName}`.trim(),
         notes: formData.note || null,
+        couponId: appliedCoupon?.coupon_id || null,
+        couponDiscount: appliedCoupon?.discount || 0,
       };
 
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
@@ -305,6 +328,12 @@ const CheckoutPage = () => {
       
       if (createdOrder.order_number) {
         setOrderNumber(createdOrder.order_number);
+      }
+
+      // Clear coupon from localStorage after successful order creation
+      if (appliedCoupon) {
+        localStorage.removeItem('appliedCoupon');
+        setAppliedCoupon(null);
       }
 
       // Calculate QPay invoice amount based on delivery method
@@ -859,6 +888,8 @@ const CheckoutPage = () => {
           subtotal={subtotal}
           shipping={shipping}
           total={total}
+          couponDiscount={couponDiscount}
+          appliedCoupon={appliedCoupon}
           formatPrice={formatPrice}
         />
         

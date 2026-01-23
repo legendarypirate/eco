@@ -57,6 +57,10 @@ const OrdersPage = () => {
   const router = useRouter();
 
   useEffect(() => {
+    document.title = 'Захиалга | TSAAS';
+  }, []);
+
+  useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       router.push('/login');
       return;

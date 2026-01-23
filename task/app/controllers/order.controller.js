@@ -2,8 +2,10 @@ const db = require("../models");
 const Order = db.orders;
 const OrderItem = db.order_items;
 const Address = db.addresses;
+const Coupon = db.coupons;
+const CouponUsage = db.coupon_usage;
 const { Op } = require("sequelize");
-const axios = require("axios");
+const axios = require("axios"); // HTTP client for API calls
 const PDFDocument = require("pdfkit");
 const fs = require("fs");
 const path = require("path");
@@ -237,11 +239,39 @@ exports.create = (req, res) => {
 
         return OrderItem.bulkCreate(orderItems, { transaction: t })
           .then(() => {
-            return Order.findOne({
-              where: { id: order.id },
-              include: [{ model: OrderItem, as: "items" }],
-              transaction: t
-            });
+            // Record coupon usage if coupon was applied
+            if (req.body.couponId && req.body.couponDiscount) {
+              return CouponUsage.create({
+                coupon_id: req.body.couponId,
+                user_id: orderData.user_id,
+                order_id: order.id,
+                discount_amount: req.body.couponDiscount,
+                used_at: new Date()
+              }, { transaction: t })
+                .then(() => {
+                  // Clear coupon from localStorage on frontend (handled by frontend)
+                  return Order.findOne({
+                    where: { id: order.id },
+                    include: [{ model: OrderItem, as: "items" }],
+                    transaction: t
+                  });
+                })
+                .catch(couponError => {
+                  console.error("Error recording coupon usage:", couponError);
+                  // Don't fail the order if coupon recording fails
+                  return Order.findOne({
+                    where: { id: order.id },
+                    include: [{ model: OrderItem, as: "items" }],
+                    transaction: t
+                  });
+                });
+            } else {
+              return Order.findOne({
+                where: { id: order.id },
+                include: [{ model: OrderItem, as: "items" }],
+                transaction: t
+              });
+            }
           })
           .then(fullOrder => {
             return t.commit().then(() => fullOrder);

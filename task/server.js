@@ -80,6 +80,8 @@ require('./app/routes/color_option.routes')(app);
 require('./app/routes/qpay.routes')(app);
 require('./app/routes/product_info_image.routes')(app);
 require('./app/routes/bank_account.routes')(app);
+require('./app/routes/footer.routes')(app);
+require('./app/routes/coupon.routes')(app);
 
 
 // Add error handling for undefined routes

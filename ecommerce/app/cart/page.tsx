@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { 
   Trash2, Plus, Minus, ShoppingBag, ArrowLeft, 
   CreditCard, Truck, Shield, User, Lock, Heart,
-  Tag, Eye, EyeOff, Mail, Facebook, Chrome, X, AlertCircle
+  Tag, Eye, EyeOff, Mail, Facebook, Chrome, X, AlertCircle, CheckCircle
 } from 'lucide-react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -30,7 +30,9 @@ const CartPage = () => {
   
   const [loading, setLoading] = useState(true);
   const [promoCode, setPromoCode] = useState('');
-  const [appliedPromo, setAppliedPromo] = useState<{code: string, discount: number} | null>(null);
+  const [appliedPromo, setAppliedPromo] = useState<{code: string, discount: number, coupon_id: number} | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [isValidatingPromo, setIsValidatingPromo] = useState(false);
   
   // Login modal states
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
@@ -40,6 +42,10 @@ const CartPage = () => {
   const [isLoginLoading, setIsLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isGoogleRedirecting, setIsGoogleRedirecting] = useState(false);
+
+  useEffect(() => {
+    document.title = 'Сагс | TSAAS';
+  }, []);
 
   useEffect(() => {
     // Simulate loading
@@ -121,35 +127,57 @@ useEffect(() => {
     return price.toLocaleString() + '₮';
   };
 
-  const handleApplyPromo = () => {
+  const handleApplyPromo = async () => {
     if (!promoCode.trim()) return;
     
-    // Mock promo codes - replace with actual API call
-    const promoCodes: Record<string, number> = {
-      'WELCOME10': 10, // 10% discount
-      'SAVE20': 20,    // 20% discount
-      'FIRSTORDER': 5000, // 5000₮ discount
-    };
+    setIsValidatingPromo(true);
+    setPromoError(null);
     
-    const discountValue = promoCodes[promoCode.toUpperCase()];
-    
-    if (discountValue) {
-      const discountAmount = discountValue <= 100 
-        ? (subtotal * discountValue) / 100 
-        : discountValue;
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const userId = user?.id || null;
       
-      setAppliedPromo({
-        code: promoCode.toUpperCase(),
-        discount: Math.min(discountAmount, subtotal)
+      const response = await fetch(`${API_URL}/coupons/validate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code: promoCode.trim(),
+          subtotal: subtotal,
+          user_id: userId,
+        }),
       });
+      
+      const result = await response.json();
+      
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || result.message || 'Урамшууллын код буруу эсвэл хүчингүй байна');
+      }
+      
+      // Apply the coupon
+      const promoData = {
+        code: result.data.code,
+        discount: result.data.discount_amount,
+        coupon_id: result.data.coupon_id,
+      };
+      setAppliedPromo(promoData);
+      // Save to localStorage for checkout
+      localStorage.setItem('appliedCoupon', JSON.stringify(promoData));
       setPromoCode('');
-    } else {
-      alert('Урамшууллын код буруу эсвэл хүчингүй байна.');
+      setPromoError(null);
+    } catch (error: any) {
+      console.error('Coupon validation error:', error);
+      setPromoError(error.message || 'Урамшууллын код шалгахад алдаа гарлаа');
+      setAppliedPromo(null);
+    } finally {
+      setIsValidatingPromo(false);
     }
   };
 
   const handleRemovePromo = () => {
     setAppliedPromo(null);
+    localStorage.removeItem('appliedCoupon');
   };
 
   const handleCheckout = () => {
@@ -533,21 +561,45 @@ useEffect(() => {
                     <input
                       type="text"
                       placeholder="Урамшууллын код"
-                      className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-900/20 focus:border-gray-300"
+                      className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-900/20 focus:border-gray-300 disabled:opacity-50"
                       value={promoCode}
-                      onChange={(e) => setPromoCode(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleApplyPromo()}
+                      onChange={(e) => {
+                        setPromoCode(e.target.value.toUpperCase());
+                        setPromoError(null);
+                      }}
+                      onKeyPress={(e) => e.key === 'Enter' && !isValidatingPromo && handleApplyPromo()}
+                      disabled={isValidatingPromo}
                     />
                   </div>
                   <button 
                     onClick={handleApplyPromo}
-                    className="px-4 py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-800 transition-colors"
+                    disabled={isValidatingPromo || !promoCode.trim()}
+                    className="px-4 py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Хэрэглэх
+                    {isValidatingPromo ? (
+                      <span className="flex items-center gap-1">
+                        <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        Шалгаж байна...
+                      </span>
+                    ) : (
+                      'Хэрэглэх'
+                    )}
                   </button>
                 </div>
+                {promoError && (
+                  <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-600 flex items-start gap-2">
+                    <AlertCircle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                    <span>{promoError}</span>
+                  </div>
+                )}
+                {appliedPromo && !promoError && (
+                  <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-xs text-green-600 flex items-center gap-2">
+                    <CheckCircle className="h-3 w-3 flex-shrink-0" />
+                    <span>Урамшууллын код амжилттай хэрэглэгдлээ!</span>
+                  </div>
+                )}
                 <p className="text-xs text-gray-500 mt-2">
-                  Жишээ: WELCOME10, SAVE20, FIRSTORDER
+                  Урамшууллын кодыг оруулаад хэрэглэнэ үү
                 </p>
               </div>
               

@@ -123,6 +123,16 @@ export default function ProductDetailPage() {
     }
   };
 
+  // Update document title when product loads
+  useEffect(() => {
+    if (product) {
+      const productName = product.nameMn || product.name || 'Бүтээгдэхүүн';
+      document.title = `${productName} | TSAAS`;
+    } else {
+      document.title = 'Бүтээгдэхүүн | TSAAS';
+    }
+  }, [product]);
+
   // Check if product is in wishlist whenever wishlistItems changes
   useEffect(() => {
     if (product && wishlistItems) {

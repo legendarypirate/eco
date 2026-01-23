@@ -38,6 +38,9 @@ db.cart_items = require("./cart_item.model.js")(sequelize, Sequelize);
 db.addresses = require("./address.model.js")(sequelize, Sequelize);
 db.product_info_images = require("./product_info_image.model.js")(sequelize, Sequelize);
 db.bank_accounts = require("./bank_account.model.js")(sequelize, Sequelize);
+db.footers = require("./footer.model.js")(sequelize, Sequelize);
+db.coupons = require("./coupon.model.js")(sequelize, Sequelize);
+db.coupon_usage = require("./coupon_usage.model.js")(sequelize, Sequelize);
 
 // ====== FIXED: Register junction tables WITHOUT foreign keys first ======
 
@@ -173,6 +176,23 @@ db.product_info_images.belongsTo(db.products, {
   constraints: false
 });
 
+// Coupon relationships
+db.coupons.hasMany(db.coupon_usage, {
+  foreignKey: "coupon_id",
+  as: "usage",
+  constraints: false
+});
+db.coupon_usage.belongsTo(db.coupons, {
+  foreignKey: "coupon_id",
+  as: "coupon",
+  constraints: false
+});
+db.coupon_usage.belongsTo(db.orders, {
+  foreignKey: "order_id",
+  as: "order",
+  constraints: false
+});
+
 // Call associate functions if they exist (for models that define their own associations)
 Object.keys(db).forEach(modelName => {
   if (db[modelName] && typeof db[modelName].associate === 'function') {
@@ -221,7 +241,7 @@ db.syncDatabase = async function(options = {}) {
     const otherModels = [
       'product_variations', 'tasks', 'orders', 'order_items',
       'color_options', 'reviews', 'cart_items', 'addresses',
-      'productFavorites', 'productCategories', 'product_info_images'
+      'productFavorites', 'productCategories', 'product_info_images', 'footers'
     ];
     
     for (const modelName of otherModels) {

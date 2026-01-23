@@ -21,6 +21,7 @@ const WishlistPage = () => {
 
   useEffect(() => {
     setIsClient(true);
+    document.title = 'Хүслийн жагсаалт | TSAAS';
   }, []);
 
   // Format price

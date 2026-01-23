@@ -8,6 +8,8 @@ interface OrderSummaryProps {
   subtotal: number;
   shipping: number;
   total: number;
+  couponDiscount?: number;
+  appliedCoupon?: {code: string, discount: number} | null;
   formatPrice: (price: number) => string;
 }
 
@@ -17,6 +19,8 @@ const OrderSummary = ({
   subtotal,
   shipping,
   total,
+  couponDiscount = 0,
+  appliedCoupon = null,
   formatPrice
 }: OrderSummaryProps) => {
   return (
@@ -67,6 +71,12 @@ const OrderSummary = ({
             <span>Хүргэлтийн төлбөр</span>
             <span>{formatPrice(shipping)}</span>
           </div>
+          {couponDiscount > 0 && appliedCoupon && (
+            <div className="flex justify-between text-green-600">
+              <span>Урамшуулал ({appliedCoupon.code})</span>
+              <span>-{formatPrice(couponDiscount)}</span>
+            </div>
+          )}
           {formData.deliveryMethod === 'delivery' && shipping === 0 && subtotal > 120000 && (
             <div className="text-xs text-green-600 text-right">
               * 120,000₮-с дээш хүргэлтийн нэмэлт төлбөр хөнгөлөгдсөн
