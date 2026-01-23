@@ -130,12 +130,23 @@ useEffect(() => {
   const handleApplyPromo = async () => {
     if (!promoCode.trim()) return;
     
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      setPromoError('Урамшууллын код хэрэглэхийн тулд нэвтрэх шаардлагатай');
+      setIsLoginModalOpen(true);
+      return;
+    }
+    
     setIsValidatingPromo(true);
     setPromoError(null);
     
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
       const userId = user?.id || null;
+      
+      if (!userId) {
+        throw new Error('Хэрэглэгчийн мэдээлэл олдсонгүй. Дахин нэвтэрнэ үү.');
+      }
       
       const response = await fetch(`${API_URL}/coupons/validate`, {
         method: 'POST',
@@ -553,6 +564,12 @@ useEffect(() => {
               
               {/* Promo Code */}
               <div className="mb-6">
+                {!isAuthenticated && (
+                  <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700 flex items-start gap-2">
+                    <Lock className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                    <span>Урамшууллын код хэрэглэхийн тулд нэвтрэх шаардлагатай</span>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -560,20 +577,25 @@ useEffect(() => {
                     </div>
                     <input
                       type="text"
-                      placeholder="Урамшууллын код"
+                      placeholder={isAuthenticated ? "Урамшууллын код" : "Нэвтрэх шаардлагатай"}
                       className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-900/20 focus:border-gray-300 disabled:opacity-50"
                       value={promoCode}
                       onChange={(e) => {
                         setPromoCode(e.target.value.toUpperCase());
                         setPromoError(null);
                       }}
-                      onKeyPress={(e) => e.key === 'Enter' && !isValidatingPromo && handleApplyPromo()}
-                      disabled={isValidatingPromo}
+                      onKeyPress={(e) => e.key === 'Enter' && !isValidatingPromo && isAuthenticated && handleApplyPromo()}
+                      disabled={isValidatingPromo || !isAuthenticated}
+                      onClick={() => {
+                        if (!isAuthenticated) {
+                          setIsLoginModalOpen(true);
+                        }
+                      }}
                     />
                   </div>
                   <button 
                     onClick={handleApplyPromo}
-                    disabled={isValidatingPromo || !promoCode.trim()}
+                    disabled={isValidatingPromo || !promoCode.trim() || !isAuthenticated}
                     className="px-4 py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isValidatingPromo ? (
@@ -599,7 +621,9 @@ useEffect(() => {
                   </div>
                 )}
                 <p className="text-xs text-gray-500 mt-2">
-                  Урамшууллын кодыг оруулаад хэрэглэнэ үү
+                  {isAuthenticated 
+                    ? "Урамшууллын кодыг оруулаад хэрэглэнэ үү"
+                    : "Урамшууллын код хэрэглэхийн тулд эхлээд нэвтрэнэ үү"}
                 </p>
               </div>
               
