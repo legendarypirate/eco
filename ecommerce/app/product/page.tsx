@@ -88,6 +88,7 @@ const ProductListPageContent = () => {
   const router = useRouter();
   const { addToCart } = useCart();
   const categoryId = searchParams.get('category') || 'all';
+  const searchQuery = searchParams.get('q') || '';
 
   useEffect(() => {
     document.title = 'Дэлгүүр | TSAAS';
@@ -117,8 +118,13 @@ const ProductListPageContent = () => {
   // Sync selectedCategory with URL params when URL changes
   useEffect(() => {
     const urlCategory = searchParams.get('category') || 'all';
+    const urlSearchQuery = searchParams.get('q') || '';
     if (urlCategory !== selectedCategory) {
       setSelectedCategory(urlCategory);
+    }
+    // If search query exists, reset category to 'all' to show all search results
+    if (urlSearchQuery && selectedCategory !== 'all') {
+      setSelectedCategory('all');
     }
   }, [searchParams, selectedCategory]);
 
@@ -130,8 +136,8 @@ const ProductListPageContent = () => {
 
   // Fetch products when filters change (but wait for categories to load first)
   useEffect(() => {
-    // Don't fetch if categories haven't loaded yet (unless it's a category change)
-    if (categories.length === 0 && selectedCategory !== 'all') {
+    // Don't fetch if categories haven't loaded yet (unless it's a category change or search)
+    if (categories.length === 0 && selectedCategory !== 'all' && !searchQuery) {
       return;
     }
     
@@ -139,7 +145,7 @@ const ProductListPageContent = () => {
     // This fixes the deadlock where products never load on initial page visit
     fetchProducts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCategory, priceRange, selectedBrands, sortBy, categories.length]);
+  }, [selectedCategory, priceRange, selectedBrands, sortBy, categories.length, searchQuery]);
 
   useEffect(() => {
     let count = 0;
@@ -213,6 +219,11 @@ const ProductListPageContent = () => {
       }
 
       let url = `${API_URL}/products?page=${pageNum}&limit=12`;
+      
+      // Add search query if present
+      if (searchQuery.trim()) {
+        url += `&search=${encodeURIComponent(searchQuery.trim())}`;
+      }
       
       if (selectedCategory !== 'all') {
         const category = findCategoryById(selectedCategory, categories);
@@ -329,6 +340,8 @@ const ProductListPageContent = () => {
     setSelectedCategory(categoryId);
     const params = new URLSearchParams(searchParams.toString());
     categoryId === 'all' ? params.delete('category') : params.set('category', categoryId);
+    // Clear search query when changing category
+    params.delete('q');
     router.push(`/product?${params.toString()}`, { scroll: false });
     
     if (categoryId !== 'all') {
@@ -603,10 +616,18 @@ const ProductListPageContent = () => {
         {/* Page Header */}
         <div className="mb-6 pt-6">
           <h1 className="text-xl font-bold text-gray-900 mb-1">
-            {selectedCategory === 'all' ? 'Бүх бүтээгдэхүүн' : getCategoryDisplayName(currentCategory)}
+            {searchQuery 
+              ? `"${searchQuery}" хайлтын үр дүн` 
+              : selectedCategory === 'all' 
+                ? 'Бүх бүтээгдэхүүн' 
+                : getCategoryDisplayName(currentCategory)
+            }
           </h1>
           <p className="text-sm text-gray-500">
-            {totalProducts} бүтээгдэхүүн
+            {searchQuery 
+              ? `${totalProducts} бүтээгдэхүүн олдлоо` 
+              : `${totalProducts} бүтээгдэхүүн`
+            }
           </p>
         </div>
 

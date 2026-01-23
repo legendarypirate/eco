@@ -262,9 +262,12 @@ exports.findAll = async (req, res) => {
   try {
     const { 
       category, categoryId, subcategory, minPrice, maxPrice, brand, 
-      inStock, isOnSale, isNew, isFeatured, rating, search, sortBy, 
+      inStock, isOnSale, isNew, isFeatured, rating, search, q, sortBy, 
       page = 1, limit = 10, includeVariations = 'true'
     } = req.query;
+    
+    // Support both 'q' and 'search' query parameters
+    const searchTerm = search || q;
     
     const offset = (page - 1) * limit;
     const where = {};
@@ -321,16 +324,23 @@ exports.findAll = async (req, res) => {
     // Rating filter
     if (rating) where.rating = { [Op.gte]: parseFloat(rating) };
     
-    // Search filter
-    if (search) {
-      where[Op.or] = [
-        { name: { [Op.iLike]: `%${search}%` } },
-        { nameMn: { [Op.iLike]: `%${search}%` } },
-        { description: { [Op.iLike]: `%${search}%` } },
-        { sku: { [Op.iLike]: `%${search}%` } },
-        { brand: { [Op.iLike]: `%${search}%` } },
-        { category: { [Op.iLike]: `%${search}%` } }
+    // Search filter - search name, description, sku, and brand fields
+    // IMPORTANT: Ensure name search works by placing it first and using proper operators
+    if (searchTerm) {
+      // Build search conditions array
+      // Use Op.or to search across multiple fields
+      // Note: Op.iLike is case-insensitive, so it should work for name search
+      const searchConditions = [
+        { name: { [Op.iLike]: `%${searchTerm}%` } },
+        { description: { [Op.iLike]: `%${searchTerm}%` } },
+        { sku: { [Op.iLike]: `%${searchTerm}%` } },
+        { brand: { [Op.iLike]: `%${searchTerm}%` } }
       ];
+      
+      // Sequelize automatically combines root-level conditions with AND
+      // and Op.or creates an OR group, so this becomes:
+      // WHERE (other conditions) AND (name ILIKE ... OR description ILIKE ... OR ...)
+      where[Op.or] = searchConditions;
     }
 
     // Build order
