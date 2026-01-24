@@ -240,7 +240,7 @@ exports.createCheckoutInvoice = async (req, res) => {
     const invoiceCode = process.env.QPAY_INVOICE_CODE || 'KONO_INVOICE';
     const invoiceReceiverCode = process.env.QPAY_RECEIVER_CODE || 'DEFAULT_COM_ID';
 
-    // Create invoice in QPay
+    // Create invoice in QPay with timeout and error handling
     const invoiceResponse = await axios.post(
       `${QPAY_BASE_URL}/invoice`,
       {
@@ -255,7 +255,8 @@ exports.createCheckoutInvoice = async (req, res) => {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
-        }
+        },
+        timeout: 30000 // 30 second timeout to prevent hanging
       }
     );
 
@@ -266,30 +267,52 @@ exports.createCheckoutInvoice = async (req, res) => {
     const invoiceData = invoiceResponse.data;
 
     // Optimize QR image: Only store if it's a URL (not base64), or limit base64 size
+    // Never store large base64 images in database to prevent memory issues
     let qrImageToStore = null;
-    if (invoiceData.qr_image) {
-      // If it's a URL, store it
-      if (invoiceData.qr_image.startsWith('http://') || invoiceData.qr_image.startsWith('https://')) {
-        qrImageToStore = invoiceData.qr_image;
-      } 
-      // If it's base64, only store if it's small enough (less than 50KB base64 = ~37KB image)
-      // Base64 is ~33% larger than binary, so 50KB base64 ≈ 37KB image
-      else if (invoiceData.qr_image.length < 50000) {
-        qrImageToStore = invoiceData.qr_image;
-      } else {
-        // For large base64 images, don't store - we'll use qr_text to generate QR instead
-        console.warn(`QR image too large (${invoiceData.qr_image.length} chars), not storing. Will use qr_text instead.`);
-        qrImageToStore = null;
+    try {
+      if (invoiceData.qr_image && typeof invoiceData.qr_image === 'string') {
+        // If it's a URL, store it (most memory efficient)
+        if (invoiceData.qr_image.startsWith('http://') || invoiceData.qr_image.startsWith('https://')) {
+          qrImageToStore = invoiceData.qr_image;
+        } 
+        // If it's base64, only store if it's very small (less than 30KB base64 = ~22KB image)
+        // Base64 is ~33% larger than binary, so 30KB base64 ≈ 22KB image
+        else if (invoiceData.qr_image.length < 30000) {
+          qrImageToStore = invoiceData.qr_image;
+        } else {
+          // For large base64 images, don't store - we'll use qr_text to generate QR instead
+          console.warn(`QR image too large (${invoiceData.qr_image.length} chars), not storing. Will use qr_text instead.`);
+          qrImageToStore = null;
+        }
       }
+    } catch (qrError) {
+      console.error('Error processing QR image:', qrError);
+      qrImageToStore = null; // Don't store if there's any error
     }
 
     // Update order with QPay invoice information
-    await order.update({
-      invoice_id: invoiceData.invoice_id,
-      qr_image: qrImageToStore,
-      qr_text: invoiceData.qr_text || null,
-      updated_at: new Date()
-    });
+    // Use try-catch to prevent database update from crashing
+    try {
+      await order.update({
+        invoice_id: invoiceData.invoice_id,
+        qr_image: qrImageToStore,
+        qr_text: invoiceData.qr_text || null,
+        updated_at: new Date()
+      });
+    } catch (updateError) {
+      console.error('Error updating order with QR image:', updateError);
+      // Try updating without qr_image if update fails
+      try {
+        await order.update({
+          invoice_id: invoiceData.invoice_id,
+          qr_text: invoiceData.qr_text || null,
+          updated_at: new Date()
+        });
+      } catch (retryError) {
+        console.error('Error updating order without QR image:', retryError);
+        throw retryError;
+      }
+    }
 
     // Reload order to get updated data (exclude qr_image from response to save memory)
     const updatedOrder = await Order.findOne({
@@ -307,15 +330,24 @@ exports.createCheckoutInvoice = async (req, res) => {
     }
 
     // Only include qr_image in invoice if it's a URL or small enough
+    // Use try-catch to prevent response from crashing
     let qrImageForResponse = null;
-    if (invoiceData.qr_image) {
-      if (invoiceData.qr_image.startsWith('http://') || invoiceData.qr_image.startsWith('https://')) {
-        qrImageForResponse = invoiceData.qr_image;
-      } else if (invoiceData.qr_image.length < 50000) {
-        qrImageForResponse = invoiceData.qr_image;
+    try {
+      if (invoiceData.qr_image && typeof invoiceData.qr_image === 'string') {
+        if (invoiceData.qr_image.startsWith('http://') || invoiceData.qr_image.startsWith('https://')) {
+          qrImageForResponse = invoiceData.qr_image;
+        } else if (invoiceData.qr_image.length < 30000) {
+          qrImageForResponse = invoiceData.qr_image;
+        }
+        // If larger, don't include - frontend will generate from qr_text
       }
-      // If larger, don't include - frontend will generate from qr_text
+    } catch (qrResponseError) {
+      console.error('Error processing QR image for response:', qrResponseError);
+      qrImageForResponse = null; // Don't include if there's any error
     }
+
+    // Ensure qr_text is always included for fallback QR generation
+    const qrText = invoiceData.qr_text || null;
 
     res.json({
       success: true,
@@ -323,17 +355,54 @@ exports.createCheckoutInvoice = async (req, res) => {
       invoice: {
         invoice_id: invoiceData.invoice_id,
         qr_image: qrImageForResponse, // Only include if URL or small base64
-        qr_text: invoiceData.qr_text,
-        qr_code: invoiceData.qr_code,
-        urls: invoiceData.urls
+        qr_text: qrText, // Always include for fallback QR generation
+        qr_code: invoiceData.qr_code || null,
+        urls: invoiceData.urls || []
       }
     });
   } catch (error) {
     console.error('Create checkout invoice error:', error);
+    
+    // Provide more detailed error information
+    let errorMessage = 'Failed to create invoice';
+    if (error.response?.data?.message) {
+      errorMessage = error.response.data.message;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    // If order was created but invoice creation failed, still return order info
+    // so frontend can handle gracefully
+    if (req.body.orderId) {
+      try {
+        const order = await Order.findOne({
+          where: { id: req.body.orderId },
+          include: [{ model: OrderItem, as: 'items' }],
+          attributes: {
+            exclude: ['qr_image']
+          }
+        });
+        
+        if (order) {
+          const orderData = order.toJSON();
+          delete orderData.qr_image;
+          
+          return res.status(500).json({
+            success: false,
+            error: 'Failed to create invoice',
+            message: errorMessage,
+            order: orderData // Include order so frontend can retry
+          });
+        }
+      } catch (orderError) {
+        console.error('Error fetching order after invoice failure:', orderError);
+      }
+    }
+    
     res.status(500).json({
       success: false,
       error: 'Failed to create invoice',
-      message: error.response?.data?.message || error.message
+      message: errorMessage
     });
   }
 };

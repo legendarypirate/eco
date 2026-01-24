@@ -365,37 +365,50 @@ exports.findAllByUserId = (req, res) => {
 };
 
 // Find a single Order with an id
-exports.findOne = (req, res) => {
+exports.findOne = async (req, res) => {
   const id = req.params.id;
 
-  Order.findOne({
-    where: { id: id },
-    include: [{ model: OrderItem, as: "items" }],
-    attributes: {
-      exclude: ['qr_image'] // Exclude large qr_image from response to save memory
-    }
-  })
-    .then(data => {
-      if (data) {
-        const cleanedData = cleanOrderData(data);
-        res.json({
-          success: true,
-          order: cleanedData
-        });
-      } else {
-        res.status(404).json({
-          success: false,
-          message: `ID-тай захиалга олдсонгүй: ${id}`
-        });
+  try {
+    const data = await Order.findOne({
+      where: { id: id },
+      include: [{ model: OrderItem, as: "items" }],
+      attributes: {
+        exclude: ['qr_image'] // Exclude large qr_image from response to save memory
       }
-    })
-    .catch(err => {
-      console.error("Find order error:", err);
-      res.status(500).json({
-        success: false,
-        message: `ID-тай захиалгыг авахад алдаа гарлаа: ${id}`
-      });
     });
+
+    if (data) {
+      const cleanedData = cleanOrderData(data);
+      res.json({
+        success: true,
+        order: cleanedData
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        message: `ID-тай захиалга олдсонгүй: ${id}`
+      });
+    }
+  } catch (err) {
+    console.error("Find order error:", err);
+    
+    // Check if error is related to aborted transaction
+    if (err.message && err.message.includes('current transaction is aborted')) {
+      console.error("CRITICAL: Transaction aborted error detected. This may indicate a previous query failed.");
+      // Try to reset the connection by creating a new query
+      try {
+        await db.sequelize.query('ROLLBACK');
+      } catch (rollbackErr) {
+        console.error("Error rolling back transaction:", rollbackErr);
+      }
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: `ID-тай захиалгыг авахад алдаа гарлаа: ${id}`,
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
 };
 
 // Find Order by order number

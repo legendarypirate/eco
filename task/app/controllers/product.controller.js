@@ -336,6 +336,7 @@ exports.findAll = async (req, res) => {
       // Use Op.or to search across multiple fields
       // Note: Op.iLike is case-insensitive, so it should work for name search
       // NOTE: Only search columns that exist in the products table (nameMn doesn't exist)
+      // IMPORTANT: Products table does NOT have nameMn column - only name, description, sku, brand
       const searchConditions = [
         { name: { [Op.iLike]: `%${searchTerm}%` } },
         { description: { [Op.iLike]: `%${searchTerm}%` } },
@@ -343,10 +344,29 @@ exports.findAll = async (req, res) => {
         { brand: { [Op.iLike]: `%${searchTerm}%` } }
       ];
       
+      // CRITICAL: Ensure nameMn is NEVER included in search conditions
+      // Filter out any accidental nameMn references
+      const filteredConditions = searchConditions.filter(condition => {
+        const keys = Object.keys(condition);
+        return !keys.includes('nameMn') && !keys.some(k => k.toLowerCase().includes('namemn'));
+      });
+      
       // Sequelize automatically combines root-level conditions with AND
       // and Op.or creates an OR group, so this becomes:
       // WHERE (other conditions) AND (name ILIKE ... OR description ILIKE ... OR ...)
-      where[Op.or] = searchConditions;
+      where[Op.or] = filteredConditions;
+    }
+    
+    // CRITICAL SAFEGUARD: Remove any nameMn references from where clause
+    // This prevents errors if nameMn somehow gets added elsewhere
+    if (where[Op.or] && Array.isArray(where[Op.or])) {
+      where[Op.or] = where[Op.or].filter(condition => {
+        if (typeof condition === 'object' && condition !== null) {
+          const keys = Object.keys(condition);
+          return !keys.includes('nameMn') && !keys.some(k => k.toLowerCase().includes('namemn'));
+        }
+        return true;
+      });
     }
 
     // Build order
@@ -407,15 +427,69 @@ exports.findAll = async (req, res) => {
     // 3. PostgreSQL can use an index on the price column if available
     // RECOMMENDATION: Add index on price column for better performance:
     // CREATE INDEX idx_products_price ON products(price);
+    
+    // Helper function to recursively remove empty objects and arrays
+    // This prevents Sequelize "Invalid value {}" errors
+    const cleanEmptyValues = (obj) => {
+      if (Array.isArray(obj)) {
+        return obj.filter(item => {
+          if (typeof item === 'object' && item !== null) {
+            const cleaned = cleanEmptyValues(item);
+            return Object.keys(cleaned).length > 0;
+          }
+          return true;
+        });
+      }
+      if (typeof obj === 'object' && obj !== null) {
+        const cleaned = {};
+        for (const [key, value] of Object.entries(obj)) {
+          if (value === null || value === undefined) continue;
+          if (typeof value === 'object') {
+            const cleanedValue = cleanEmptyValues(value);
+            // Skip empty objects and empty arrays
+            if (Array.isArray(cleanedValue) && cleanedValue.length === 0) continue;
+            if (!Array.isArray(cleanedValue) && Object.keys(cleanedValue).length === 0) continue;
+            cleaned[key] = cleanedValue;
+          } else {
+            cleaned[key] = value;
+          }
+        }
+        return cleaned;
+      }
+      return obj;
+    };
+    
     let filteredPriceStats = null;
     try {
+      // CRITICAL: Create a clean where clause without any nameMn references
+      // This prevents "column product.nameMn does not exist" errors
+      const cleanWhere = JSON.parse(JSON.stringify(where)); // Deep clone
+      if (cleanWhere[Op.or] && Array.isArray(cleanWhere[Op.or])) {
+        cleanWhere[Op.or] = cleanWhere[Op.or].filter(condition => {
+          if (typeof condition === 'object' && condition !== null) {
+            const keys = Object.keys(condition);
+            // Remove empty objects
+            if (keys.length === 0) return false;
+            return !keys.includes('nameMn') && !keys.some(k => k.toLowerCase().includes('namemn'));
+          }
+          return true;
+        });
+        // Remove Op.or if array becomes empty
+        if (cleanWhere[Op.or].length === 0) {
+          delete cleanWhere[Op.or];
+        }
+      }
+      
+      // Clean the where clause to remove any empty objects
+      const finalCleanWhere = cleanEmptyValues(cleanWhere);
+      
       // For search queries with ILIKE, use a more efficient approach
       // Instead of scanning all rows, we'll use ORDER BY with LIMIT
-      if (searchTerm && where[Op.or]) {
+      if (searchTerm && finalCleanWhere[Op.or]) {
         // Use separate queries for min and max to avoid memory issues
         const minPriceResult = await Product.findOne({
           attributes: ['price'],
-          where: where,
+          where: finalCleanWhere,
           order: [['price', 'ASC']],
           limit: 1,
           raw: true
@@ -423,7 +497,7 @@ exports.findAll = async (req, res) => {
         
         const maxPriceResult = await Product.findOne({
           attributes: ['price'],
-          where: where,
+          where: finalCleanWhere,
           order: [['price', 'DESC']],
           limit: 1,
           raw: true
@@ -442,18 +516,42 @@ exports.findAll = async (req, res) => {
             [sequelize.fn('MIN', sequelize.col('price')), 'minPrice'],
             [sequelize.fn('MAX', sequelize.col('price')), 'maxPrice']
           ],
-          where: where
+          where: finalCleanWhere
         });
       }
     } catch (statsError) {
       console.error('Error calculating price stats:', statsError);
-      // Fallback to default values if stats query fails
-      filteredPriceStats = {
-        dataValues: {
-          minPrice: 0,
-          maxPrice: 5000000
+      // Check if error is related to nameMn column or empty objects
+      if (statsError.message && (statsError.message.includes('nameMn') || statsError.message.includes('Invalid value'))) {
+        console.error('CRITICAL: Error in price stats query:', statsError.message);
+        // Try again with a completely clean where clause (no search, no empty objects)
+        try {
+          const fallbackWhere = { ...where };
+          delete fallbackWhere[Op.or];
+          
+          // Clean empty objects from fallback where clause
+          const cleanedFallbackWhere = cleanEmptyValues(fallbackWhere);
+          
+          filteredPriceStats = await Product.findOne({
+            attributes: [
+              [sequelize.fn('MIN', sequelize.col('price')), 'minPrice'],
+              [sequelize.fn('MAX', sequelize.col('price')), 'maxPrice']
+            ],
+            where: cleanedFallbackWhere
+          });
+        } catch (fallbackError) {
+          console.error('Fallback price stats query also failed:', fallbackError);
         }
-      };
+      }
+      // Fallback to default values if stats query fails
+      if (!filteredPriceStats) {
+        filteredPriceStats = {
+          dataValues: {
+            minPrice: 0,
+            maxPrice: 5000000
+          }
+        };
+      }
     }
 
     // Get total count separately (without includes) to ensure accurate count
