@@ -258,51 +258,64 @@ exports.create = (req, res) => {
 
         return OrderItem.bulkCreate(orderItems, { transaction: t })
           .then(() => {
-            // Record coupon usage if coupon was applied
-            if (req.body.couponId && req.body.couponDiscount) {
-              return CouponUsage.create({
-                coupon_id: req.body.couponId,
-                user_id: orderData.user_id,
-                order_id: order.id,
-                discount_amount: req.body.couponDiscount,
-                used_at: new Date()
-              }, { transaction: t })
-                .then(() => {
-                  // Clear coupon from localStorage on frontend (handled by frontend)
-                  return Order.findOne({
-                    where: { id: order.id },
-                    include: [{ model: OrderItem, as: "items" }],
-                    transaction: t,
-                    attributes: {
-                      exclude: ['qr_image'] // Exclude large qr_image from response to save memory
-                    }
-                  });
-                })
-                .catch(couponError => {
-                  console.error("Error recording coupon usage:", couponError);
-                  // Don't fail the order if coupon recording fails
-                  return Order.findOne({
-                    where: { id: order.id },
-                    include: [{ model: OrderItem, as: "items" }],
-                    transaction: t,
-                    attributes: {
-                      exclude: ['qr_image'] // Exclude large qr_image from response to save memory
-                    }
-                  });
-                });
-            } else {
-              return Order.findOne({
-                where: { id: order.id },
-                include: [{ model: OrderItem, as: "items" }],
-                transaction: t,
-                attributes: {
-                  exclude: ['qr_image'] // Exclude large qr_image from response to save memory
-                }
-              });
-            }
+            // Get the full order first, then commit transaction
+            // Record coupon usage AFTER transaction commits to avoid aborting main transaction
+            return Order.findOne({
+              where: { id: order.id },
+              include: [{ model: OrderItem, as: "items" }],
+              transaction: t,
+              attributes: {
+                exclude: ['qr_image'] // Exclude large qr_image from response to save memory
+              }
+            });
           })
           .then(fullOrder => {
-            return t.commit().then(() => fullOrder);
+            // Commit the main transaction first
+            return t.commit().then(() => {
+              // Now record coupon usage in a separate transaction (after order is committed)
+              // This way, if coupon usage fails, the order is still created
+              if (req.body.couponId && req.body.couponDiscount) {
+                // Validate that the coupon exists before trying to record usage
+                return Coupon.findByPk(req.body.couponId)
+                  .then(coupon => {
+                    if (!coupon) {
+                      console.warn(`Coupon with id ${req.body.couponId} not found, skipping coupon usage recording`);
+                      return fullOrder;
+                    }
+                    
+                    // Coupon exists, record usage in a separate transaction
+                    return CouponUsage.create({
+                      coupon_id: req.body.couponId,
+                      user_id: orderData.user_id,
+                      order_id: order.id,
+                      discount_amount: req.body.couponDiscount,
+                      used_at: new Date()
+                    })
+                      .then(() => {
+                        console.log(`Coupon usage recorded successfully for coupon ${req.body.couponId} and order ${order.id}`);
+                        return fullOrder;
+                      })
+                      .catch(couponError => {
+                        // Log error but don't fail the order (it's already committed)
+                        console.error("Error recording coupon usage (order already created):", couponError);
+                        const isForeignKeyError = couponError.name === 'SequelizeForeignKeyConstraintError' ||
+                                                 (couponError.parent && couponError.parent.code === '23503');
+                        if (isForeignKeyError) {
+                          console.warn(`Foreign key constraint error when recording coupon usage for coupon ${req.body.couponId}. Coupon may have been deleted.`);
+                        }
+                        // Return the order anyway since it's already created
+                        return fullOrder;
+                      });
+                  })
+                  .catch(couponCheckError => {
+                    // If checking coupon fails, log but return order anyway
+                    console.error("Error checking coupon existence (order already created):", couponCheckError);
+                    return fullOrder;
+                  });
+              } else {
+                return fullOrder;
+              }
+            });
           });
       })
       .then(order => {
