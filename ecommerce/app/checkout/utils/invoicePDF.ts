@@ -111,6 +111,7 @@ interface InvoiceData {
   customerName: string;
   customerEmail: string;
   customerPhone: string;
+  customerRegister?: string;
   issuerName: string;
   issuerRegister: string;
   issuerEmail: string;
@@ -176,7 +177,7 @@ export async function generateInvoicePDF(data: InvoiceData): Promise<void> {
           </div>
           <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
             <span style="font-weight: bold; min-width: 120px;">Банкны данс:</span>
-            <span>${data.issuerBankAccount ? data.issuerBankAccount + ' (Голомт банк)' : '-'}</span>
+            <span>${data.issuerBankAccount ? data.issuerBankAccount + (data.issuerBankName ? ` (${data.issuerBankName})` : '') : '-'}</span>
           </div>
           ${data.orderId ? `
           <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
@@ -192,6 +193,12 @@ export async function generateInvoicePDF(data: InvoiceData): Promise<void> {
             <span style="font-weight: bold; min-width: 120px;">Байгууллагын нэр:</span>
             <span>${data.customerName}</span>
           </div>
+          ${data.customerRegister ? `
+          <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+            <span style="font-weight: bold; min-width: 120px;">Регистрийн дугаар:</span>
+            <span>${data.customerRegister}</span>
+          </div>
+          ` : ''}
           <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
             <span style="font-weight: bold; min-width: 120px;">Имэйл:</span>
             <span>${data.customerEmail}</span>

@@ -57,6 +57,13 @@ const CheckoutPageContent = () => {
     phone: '',
   });
 
+  // Bank account state
+  const [bankAccount, setBankAccount] = useState<{
+    bank_name: string;
+    account_number: string;
+    account_name: string;
+  } | null>(null);
+
   // Form state
   const [formData, setFormData] = useState({
     firstName: '',
@@ -73,6 +80,29 @@ const CheckoutPageContent = () => {
 
   useEffect(() => {
     document.title = 'Төлбөр төлөх | TSAAS';
+  }, []);
+
+  // Fetch bank account from backend
+  useEffect(() => {
+    const fetchBankAccount = async () => {
+      try {
+        const result = await apiService.getActiveBankAccounts();
+        if (result.success && result.data && result.data.length > 0) {
+          // Use the first active bank account
+          const firstBankAccount = result.data[0];
+          setBankAccount({
+            bank_name: firstBankAccount.bank_name,
+            account_number: firstBankAccount.account_number,
+            account_name: firstBankAccount.account_name,
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching bank account:', error);
+        // Keep null on error - will use fallback values
+      }
+    };
+
+    fetchBankAccount();
   }, []);
 
   // Handle re-order redirect with orderId and invoiceId (optional - for future use)
@@ -973,15 +1003,16 @@ const CheckoutPageContent = () => {
           : (latestFormDataForInvoice || formData).firstName.trim()),
         customerEmail: invoiceFormData.email || (latestFormDataForInvoice || formData).email || '',
         customerPhone: invoiceFormData.phone || (latestFormDataForInvoice || formData).phone || '',
+        customerRegister: invoiceFormData.register || undefined,
         issuerName: 'ТЭРГҮҮН ГЭРЭГЭ ХХК',
         issuerRegister: '6002536',
         issuerEmail: '',
-        issuerPhone: '7000-5060, 98015060',
+        issuerPhone: '7000-5060',
         issuerAddress: 'ХУД, 2-р хороо, Дунд Гол гудамж, Хийморь хотхон, 34 р байр',
-        issuerBankName: 'Тэргүүн гэрэгэ ххк',
-        issuerBankAccount: '26000 500 5003966474',
+        issuerBankName: bankAccount?.bank_name || 'Тэргүүн гэрэгэ ххк',
+        issuerBankAccount: bankAccount?.account_number || '26000 500 5003966474',
         issuerBankIban: '',
-        issuerBankAccountHolder: 'Idersaikhan',
+        issuerBankAccountHolder: bankAccount?.account_name || 'Idersaikhan',
         orderId: createdOrder.order_number || `INV-${createdOrder.id}`,
         items: invoiceItems,
         subtotal: subtotalWithoutVat,
@@ -1013,7 +1044,7 @@ const CheckoutPageContent = () => {
     } finally {
       setIsCreatingInvoice(false);
     }
-  }, [cartItems, formData, invoiceFormData, subtotal, clearCart, validateInvoiceForm, isAuthenticated, user, latestFormDataForInvoice]);
+  }, [cartItems, formData, invoiceFormData, subtotal, clearCart, validateInvoiceForm, isAuthenticated, user, latestFormDataForInvoice, bankAccount]);
 
   // Clean up interval on unmount
   useEffect(() => {
