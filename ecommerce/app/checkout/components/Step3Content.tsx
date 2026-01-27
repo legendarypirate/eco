@@ -58,7 +58,19 @@ const Step3Content = ({
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Хүргэлтийн хаяг:</span>
-                <span className="font-medium text-right">{formData.address}</span>
+                <span className="font-medium text-right">
+                  {formData.deliveryMethod === 'pickup' || formData.deliveryMethod === 'invoice' 
+                    ? 'Ирж авах'
+                    : (() => {
+                        const addressParts = [
+                          formData.city,
+                          formData.district && `Дүүрэг: ${formData.district}`,
+                          formData.khoroo && `Хороо: ${formData.khoroo}`,
+                          formData.address
+                        ].filter(Boolean);
+                        return addressParts.length > 0 ? addressParts.join(', ') : 'Хаяг оруулаагүй';
+                      })()}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Утасны дугаар:</span>
