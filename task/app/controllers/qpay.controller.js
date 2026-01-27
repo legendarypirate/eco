@@ -456,7 +456,7 @@ exports.createCheckoutInvoice = async (req, res) => {
         invoice_code: invoiceCode,
         sender_invoice_no: senderInvoiceNo,
         invoice_receiver_code: invoiceReceiverCode,
-        invoice_description: description || `Захиалга - ${order.order_number}`,
+        invoice_description: description || `${order.id}, ${order.phone_number}, ${order.customer_name}`,
         amount: parseFloat(amount)
       },
       {
