@@ -38,6 +38,14 @@ const CheckoutPageContent = () => {
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [latestFormDataForInvoice, setLatestFormDataForInvoice] = useState<any>(null);
   
+  // Store order totals before clearing cart (for Step 3 display)
+  const [storedOrderTotals, setStoredOrderTotals] = useState<{
+    subtotal: number;
+    shipping: number;
+    couponDiscount: number;
+    total: number;
+  } | null>(null);
+  
   // Refs
   const hasPrefilledRef = useRef(false);
   
@@ -190,8 +198,12 @@ const CheckoutPageContent = () => {
   // Calculate totals (excluding gift items - they are free)
   const { subtotal, shipping, couponDiscount, total } = useMemo(() => {
     const subtotal = cartItems
-      .filter(item => !item.isGift)
-      .reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+      .filter(item => !item.isGift && item.product && item.product.price)
+      .reduce((sum, item) => {
+        const price = typeof item.product.price === 'number' ? item.product.price : parseFloat(item.product.price) || 0;
+        const quantity = typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0;
+        return sum + (price * quantity);
+      }, 0);
     
     let shipping = 0;
     if (formData.deliveryMethod === 'pickup' || formData.deliveryMethod === 'invoice') {
@@ -609,6 +621,14 @@ const CheckoutPageContent = () => {
 
   const completeOrder = useCallback(async () => {
     try {
+      // Store order totals before clearing cart
+      setStoredOrderTotals({
+        subtotal,
+        shipping,
+        couponDiscount,
+        total,
+      });
+      
       if (currentOrderId) {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
         try {
@@ -637,10 +657,17 @@ const CheckoutPageContent = () => {
       
     } catch (error: any) {
       console.error('Failed to complete order:', error);
+      // Store order totals before clearing cart even on error
+      setStoredOrderTotals({
+        subtotal,
+        shipping,
+        couponDiscount,
+        total,
+      });
       clearCart();
       setStep(3);
     }
-  }, [currentOrderId, clearCart, isAuthenticated]);
+  }, [currentOrderId, clearCart, isAuthenticated, subtotal, shipping, couponDiscount, total]);
 
   const startPaymentCheck = useCallback((invoiceId: string) => {
     if (checkInterval) clearInterval(checkInterval);
@@ -967,6 +994,14 @@ const CheckoutPageContent = () => {
       await generateInvoicePDF(invoiceData);
       console.log('[Invoice PDF] PDF invoice generated and downloaded successfully');
 
+      // Store order totals before clearing cart
+      setStoredOrderTotals({
+        subtotal,
+        shipping: 0, // Invoice method has 0 shipping
+        couponDiscount: 0, // Invoice doesn't use coupons
+        total: subtotal,
+      });
+
       clearCart();
       setShowInvoiceModal(false);
       setStep(3);
@@ -1010,10 +1045,10 @@ const CheckoutPageContent = () => {
         <OrderSummary
           cartItems={cartItems}
           formData={formData}
-          subtotal={subtotal}
-          shipping={shipping}
-          total={total}
-          couponDiscount={couponDiscount}
+          subtotal={storedOrderTotals?.subtotal ?? subtotal}
+          shipping={storedOrderTotals?.shipping ?? shipping}
+          total={storedOrderTotals?.total ?? total}
+          couponDiscount={storedOrderTotals?.couponDiscount ?? couponDiscount}
           appliedCoupon={appliedCoupon}
           formatPrice={formatPrice}
         />
@@ -1054,7 +1089,10 @@ const CheckoutPageContent = () => {
           {step === 3 && (
             <Step3Content
               orderNumber={orderNumber}
-              total={total}
+              subtotal={storedOrderTotals?.subtotal ?? subtotal}
+              shipping={storedOrderTotals?.shipping ?? shipping}
+              couponDiscount={storedOrderTotals?.couponDiscount ?? couponDiscount}
+              total={storedOrderTotals?.total ?? total}
               formData={formData}
               paymentMethod={paymentMethod}
               isAuthenticated={isAuthenticated}

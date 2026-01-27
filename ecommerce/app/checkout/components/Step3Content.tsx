@@ -9,6 +9,9 @@ import { Button } from '@/app/components/ui/button';
 
 interface Step3ContentProps {
   orderNumber: string;
+  subtotal: number;
+  shipping: number;
+  couponDiscount: number;
   total: number;
   formData: any;
   paymentMethod: string;
@@ -18,6 +21,9 @@ interface Step3ContentProps {
 
 const Step3Content = ({
   orderNumber,
+  subtotal,
+  shipping,
+  couponDiscount,
   total,
   formData,
   paymentMethod,
@@ -53,7 +59,23 @@ const Step3Content = ({
                 <span className="font-medium">{orderNumber}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Нийт дүн:</span>
+                <span className="text-gray-600">Барааны үнэ:</span>
+                <span className="font-medium">{formatPrice(subtotal)}</span>
+              </div>
+              {shipping > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Хүргэлтийн төлбөр:</span>
+                  <span className="font-medium">{formatPrice(shipping)}</span>
+                </div>
+              )}
+              {couponDiscount > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span className="text-gray-600">Урамшуулал:</span>
+                  <span className="font-medium">-{formatPrice(couponDiscount)}</span>
+                </div>
+              )}
+              <div className="flex justify-between border-t border-gray-200 pt-3">
+                <span className="text-gray-600 font-bold">Нийт дүн:</span>
                 <span className="font-bold">{formatPrice(total)}</span>
               </div>
               <div className="flex justify-between">

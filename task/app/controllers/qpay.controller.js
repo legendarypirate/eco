@@ -2,6 +2,7 @@ const db = require("../models");
 const Order = db.orders;
 const OrderItem = db.order_items;
 const Address = db.addresses;
+const Product = db.products;
 const axios = require('axios');
 
 // QPay credentials - should be in environment variables
@@ -121,6 +122,82 @@ const saveAddressFromOrder = async (order) => {
   }
 };
 
+// Helper function to deduct product stock when payment is successful
+const deductProductStock = async (orderItems) => {
+  try {
+    if (!orderItems || orderItems.length === 0) {
+      console.log('No order items to deduct stock for');
+      return { success: true, message: 'No items to process' };
+    }
+
+    const stockUpdates = [];
+    const errors = [];
+
+    for (const item of orderItems) {
+      try {
+        const productId = item.product_id;
+        const quantity = item.quantity || 1;
+
+        if (!productId) {
+          console.warn(`Order item ${item.id} has no product_id, skipping stock deduction`);
+          continue;
+        }
+
+        // Find the product
+        const product = await Product.findByPk(productId);
+        
+        if (!product) {
+          console.warn(`Product ${productId} not found for order item ${item.id}`);
+          errors.push({ productId, error: 'Product not found' });
+          continue;
+        }
+
+        const currentStock = product.stockQuantity || 0;
+        const newStock = Math.max(0, currentStock - quantity); // Ensure stock doesn't go negative
+
+        // Update stock quantity
+        await Product.update(
+          {
+            stockQuantity: newStock,
+            inStock: newStock > 0
+          },
+          {
+            where: { id: productId }
+          }
+        );
+
+        stockUpdates.push({
+          productId,
+          productName: item.name_mn || item.name,
+          quantity,
+          oldStock: currentStock,
+          newStock
+        });
+
+        console.log(`Stock deducted for product ${productId} (${item.name_mn || item.name}): ${currentStock} -> ${newStock} (deducted ${quantity})`);
+      } catch (itemError) {
+        console.error(`Error deducting stock for order item ${item.id}:`, itemError);
+        errors.push({ 
+          productId: item.product_id, 
+          error: itemError.message 
+        });
+      }
+    }
+
+    return {
+      success: errors.length === 0,
+      stockUpdates,
+      errors: errors.length > 0 ? errors : undefined
+    };
+  } catch (error) {
+    console.error('Error in deductProductStock:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
 // Helper function to parse address components from shipping_address string
 const parseAddressComponents = (shippingAddress) => {
   if (!shippingAddress || shippingAddress === 'Ирж авах') {
@@ -171,6 +248,70 @@ const parseAddressComponents = (shippingAddress) => {
   }
 
   return { city, district, khoroo, address };
+};
+
+// Helper function to extract transaction information (ORDERID, Phone, Name) from QPay invoice
+const extractTransactionInfo = async (invoiceId, order = null) => {
+  try {
+    // Initialize with order data if available
+    let transactionInfo = {
+      ORDERID: order?.order_number || null,
+      Phone: order?.phone_number || null,
+      Name: order?.customer_name || null
+    };
+
+    if (!invoiceId) {
+      return transactionInfo;
+    }
+
+    // Get invoice details from QPay
+    const token = await getQPayToken();
+    const invoiceResponse = await axios.get(
+      `${QPAY_BASE_URL}/invoice/${invoiceId}`,
+      {
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      }
+    );
+    
+    const invoiceData = invoiceResponse.data;
+    
+    // Extract ORDERID from sender_invoice_no
+    if (invoiceData.sender_invoice_no) {
+      const orderMatch = invoiceData.sender_invoice_no.match(/ECO_([^_]+)/);
+      if (orderMatch) {
+        transactionInfo.ORDERID = orderMatch[1];
+      } else {
+        transactionInfo.ORDERID = invoiceData.sender_invoice_no;
+      }
+    }
+    
+    // Extract Name and Phone from invoice_receiver_data
+    if (invoiceData.invoice_receiver_data) {
+      const receiverData = invoiceData.invoice_receiver_data;
+      if (receiverData.name) {
+        transactionInfo.Name = receiverData.name;
+      }
+      if (receiverData.phone) {
+        transactionInfo.Phone = receiverData.phone;
+      }
+      if (receiverData.register && !transactionInfo.Phone) {
+        transactionInfo.Phone = receiverData.register;
+      }
+    }
+
+    return transactionInfo;
+  } catch (error) {
+    // If invoice fetch fails, return order data if available
+    console.log('Could not fetch invoice details for transaction info:', error.message);
+    return {
+      ORDERID: order?.order_number || null,
+      Phone: order?.phone_number || null,
+      Name: order?.customer_name || null
+    };
+  }
 };
 
 // Helper function to call e-chuchu API
@@ -528,6 +669,28 @@ exports.checkPaymentStatus = async (req, res) => {
       paymentStatus = payment.payment_status || 'PENDING';
       isPaid = paymentStatus === 'PAID';
     }
+    
+    // Extract transaction information: ORDERID, Phone, Name
+    const transactionInfo = await extractTransactionInfo(invoiceId, order);
+    
+    // Also check payment data rows for additional transaction info
+    if (paymentData.rows && paymentData.rows.length > 0) {
+      const payment = paymentData.rows[0];
+      
+      // Extract transaction data from QPay payment response
+      if (payment.customer_name || payment.customer_name_mn) {
+        transactionInfo.Name = payment.customer_name || payment.customer_name_mn || transactionInfo.Name;
+      }
+      if (payment.phone || payment.phone_number || payment.customer_phone) {
+        transactionInfo.Phone = payment.phone || payment.phone_number || payment.customer_phone || transactionInfo.Phone;
+      }
+      if (payment.sender_invoice_no && !transactionInfo.ORDERID) {
+        const orderMatch = payment.sender_invoice_no.match(/ECO_([^_]+)/);
+        if (orderMatch) {
+          transactionInfo.ORDERID = orderMatch[1];
+        }
+      }
+    }
 
     // Update order status if paid
     if (isPaid && order.payment_status !== 1) {
@@ -537,12 +700,21 @@ exports.checkPaymentStatus = async (req, res) => {
       });
       order.payment_status = 1;
 
-      // Call e-chuchu API for delivery orders after payment success
-      // Reload order with items for chuchu API call
+      // Reload order with items for stock deduction and chuchu API call
       const orderWithItems = await Order.findOne({
         where: { id: order.id },
         include: [{ model: OrderItem, as: 'items' }]
       });
+
+      // Deduct product stock when QPay payment is successful (direct payment)
+      if (orderWithItems && orderWithItems.items && orderWithItems.items.length > 0) {
+        const stockResult = await deductProductStock(orderWithItems.items);
+        if (stockResult.success) {
+          console.log(`Stock deducted successfully for order ${order.id} after QPay payment`);
+        } else {
+          console.warn(`Stock deduction had errors for order ${order.id}:`, stockResult.errors);
+        }
+      }
 
       if (orderWithItems && orderWithItems.items && orderWithItems.items.length > 0) {
         // Call e-chuchu API for delivery orders after payment success
@@ -603,6 +775,11 @@ exports.checkPaymentStatus = async (req, res) => {
         status: paymentStatus,
         isPaid,
         data: paymentData
+      },
+      transaction: {
+        ORDERID: transactionInfo.ORDERID,
+        Phone: transactionInfo.Phone,
+        Name: transactionInfo.Name
       }
     });
   } catch (error) {
@@ -651,11 +828,21 @@ exports.paymentWebhook = async (req, res) => {
       });
       console.log(`Order ${order.id} marked as paid via webhook`);
 
-      // Call e-chuchu API for delivery orders after payment success via webhook
+      // Reload order with items for stock deduction and chuchu API call
       const orderWithItems = await Order.findOne({
         where: { id: order.id },
         include: [{ model: OrderItem, as: 'items' }]
       });
+
+      // Deduct product stock when QPay payment is successful via webhook (direct payment)
+      if (orderWithItems && orderWithItems.items && orderWithItems.items.length > 0) {
+        const stockResult = await deductProductStock(orderWithItems.items);
+        if (stockResult.success) {
+          console.log(`Stock deducted successfully for order ${order.id} via QPay webhook`);
+        } else {
+          console.warn(`Stock deduction had errors for order ${order.id} via webhook:`, stockResult.errors);
+        }
+      }
 
       if (orderWithItems && orderWithItems.items && orderWithItems.items.length > 0) {
         // Call e-chuchu API for delivery orders after payment success via webhook
@@ -709,11 +896,19 @@ exports.paymentWebhook = async (req, res) => {
       console.log(`Order ${order.id} marked as cancelled via webhook`);
     }
 
+    // Extract transaction information: ORDERID, Phone, Name
+    const transactionInfo = await extractTransactionInfo(object_id, order);
+
     res.json({
       success: true,
       message: 'Webhook processed successfully',
       orderId: order.id,
-      status: order.payment_status
+      status: order.payment_status,
+      transaction: {
+        ORDERID: transactionInfo.ORDERID,
+        Phone: transactionInfo.Phone,
+        Name: transactionInfo.Name
+      }
     });
   } catch (error) {
     console.error('Webhook error:', error);
@@ -746,6 +941,9 @@ exports.getOrderByInvoice = async (req, res) => {
       });
     }
 
+    // Extract transaction information: ORDERID, Phone, Name
+    const transactionInfo = await extractTransactionInfo(invoiceId, order);
+
     // Convert order to plain object and ensure qr_image is not included
     const orderData = order ? order.toJSON() : null;
     if (orderData) {
@@ -754,7 +952,12 @@ exports.getOrderByInvoice = async (req, res) => {
 
     res.json({
       success: true,
-      order: orderData
+      order: orderData,
+      transaction: {
+        ORDERID: transactionInfo.ORDERID,
+        Phone: transactionInfo.Phone,
+        Name: transactionInfo.Name
+      }
     });
   } catch (error) {
     console.error('Get order by invoice error:', error);

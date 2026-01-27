@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Eye, Edit, Truck, CheckCircle, XCircle } from "lucide-react";
+import { Search, Eye, Edit, Truck, CheckCircle, XCircle, Printer } from "lucide-react";
 import { useState, useEffect } from "react";
 
 type OrderItem = {
@@ -351,6 +351,163 @@ function OrderPage() {
     setIsEditOpen(true);
   };
 
+  const handlePrintOrder = (order: Order) => {
+    // Create print-friendly HTML content
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Захиалгын дэлгэрэнгүй - #${order.id}</title>
+          <style>
+            @media print {
+              @page {
+                margin: 1cm;
+              }
+            }
+            body {
+              font-family: Arial, sans-serif;
+              padding: 20px;
+              max-width: 800px;
+              margin: 0 auto;
+            }
+            .header {
+              text-align: center;
+              border-bottom: 2px solid #000;
+              padding-bottom: 20px;
+              margin-bottom: 30px;
+            }
+            .header h1 {
+              margin: 0;
+              font-size: 24px;
+            }
+            .order-info {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 30px;
+              margin-bottom: 30px;
+            }
+            .section {
+              margin-bottom: 20px;
+            }
+            .section h2 {
+              font-size: 18px;
+              border-bottom: 1px solid #ccc;
+              padding-bottom: 5px;
+              margin-bottom: 10px;
+            }
+            .section p {
+              margin: 5px 0;
+              font-size: 14px;
+            }
+            .items-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 20px;
+            }
+            .items-table th,
+            .items-table td {
+              border: 1px solid #ddd;
+              padding: 10px;
+              text-align: left;
+            }
+            .items-table th {
+              background-color: #f5f5f5;
+              font-weight: bold;
+            }
+            .items-table tr:nth-child(even) {
+              background-color: #f9f9f9;
+            }
+            .total-section {
+              margin-top: 30px;
+              text-align: right;
+              font-size: 18px;
+              font-weight: bold;
+              border-top: 2px solid #000;
+              padding-top: 10px;
+            }
+            .status-badge {
+              display: inline-block;
+              padding: 5px 10px;
+              border-radius: 4px;
+              font-size: 12px;
+              margin-left: 10px;
+            }
+            .no-print {
+              display: none;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Захиалгын дэлгэрэнгүй</h1>
+            <p style="font-size: 16px; margin-top: 10px;">Захиалгын дугаар: #${order.id}</p>
+          </div>
+
+          <div class="order-info">
+            <div class="section">
+              <h2>Харилцагчийн мэдээлэл</h2>
+              <p><strong>Нэр:</strong> ${order.customer_name || '-'}</p>
+              <p><strong>Утасны дугаар:</strong> ${order.customer_phone || '-'}</p>
+              ${order.district ? `<p><strong>Дүүрэг:</strong> ${order.district}</p>` : ''}
+              ${order.khoroo ? `<p><strong>Хороо:</strong> ${order.khoroo}</p>` : ''}
+              <p><strong>Хаяг:</strong> ${order.address || '-'}</p>
+            </div>
+
+            <div class="section">
+              <h2>Захиалгын мэдээлэл</h2>
+              <p><strong>Үүссэн огноо:</strong> ${order.created_at}</p>
+              <p><strong>Төлөв:</strong> ${statusOptions.find(s => s.value === order.status)?.label || order.status}</p>
+              <p><strong>Төлбөрийн төлөв:</strong> ${paymentOptions.find(p => p.value === order.payment_status)?.label || order.payment_status}</p>
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>Захиалгын бараанууд</h2>
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th>№</th>
+                  <th>Барааны нэр</th>
+                  <th>Тоо ширхэг</th>
+                  <th>Нэгжийн үнэ</th>
+                  <th>Нийт</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${order.items.map((item, index) => `
+                  <tr>
+                    <td>${index + 1}</td>
+                    <td>${item.name}</td>
+                    <td>${item.qty}</td>
+                    <td>${item.price.toLocaleString()}₮</td>
+                    <td>${(item.qty * item.price).toLocaleString()}₮</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="total-section">
+            <p>Нийт дүн: ${order.total.toLocaleString()}₮</p>
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    // Open new window and write content
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+    }
+  };
+
   const handleStatusChange = async (orderId: string, newStatus: Order["status"]) => {
     // Optimistically update UI
     setOrders(prev => 
@@ -506,6 +663,14 @@ function OrderPage() {
                 >
                   <Edit className="h-4 w-4 mr-1" />
                   Засах
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handlePrintOrder(order)}
+                >
+                  <Printer className="h-4 w-4 mr-1" />
+                  Хэвлэх
                 </Button>
               </div>
             </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from 'react';
 import { Package, Shield, Truck, Clock } from 'lucide-react';
 
 interface OrderSummaryProps {
@@ -23,6 +24,34 @@ const OrderSummary = ({
   appliedCoupon = null,
   formatPrice
 }: OrderSummaryProps) => {
+  // Calculate subtotal from cartItems (excluding gift items)
+  // Always calculate from cartItems when available, as it's the source of truth
+  const calculatedSubtotal = useMemo(() => {
+    // If cartItems is available and has items, always calculate from them
+    if (cartItems && cartItems.length > 0) {
+      const calculated = cartItems
+        .filter(item => !item.isGift && item.product && item.product.price)
+        .reduce((sum, item) => {
+          const price = typeof item.product.price === 'number' 
+            ? item.product.price 
+            : parseFloat(String(item.product.price)) || 0;
+          const quantity = typeof item.quantity === 'number' 
+            ? item.quantity 
+            : parseInt(String(item.quantity)) || 0;
+          return sum + (price * quantity);
+        }, 0);
+      
+      // Return calculated value (even if 0, as it might be accurate)
+      return calculated;
+    }
+    
+    // Fallback to prop when cartItems is empty (e.g., after order completion in Step 3)
+    // Use the prop value directly, as it should contain stored order totals
+    return subtotal;
+  }, [cartItems, subtotal]);
+
+  // Use calculated subtotal
+  const displaySubtotal = calculatedSubtotal;
   return (
     <div className="lg:col-span-1 order-2 lg:order-1">
       <div className="bg-white rounded-lg border border-gray-200 p-6 sticky top-6">
@@ -65,7 +94,7 @@ const OrderSummary = ({
         <div className="border-t border-gray-200 pt-4 space-y-3">
           <div className="flex justify-between text-gray-600">
             <span>Барааны үнэ</span>
-            <span>{formatPrice(subtotal)}</span>
+            <span>{formatPrice(displaySubtotal)}</span>
           </div>
           <div className="flex justify-between text-gray-600">
             <span>Хүргэлтийн төлбөр</span>
@@ -77,7 +106,7 @@ const OrderSummary = ({
               <span>-{formatPrice(couponDiscount)}</span>
             </div>
           )}
-          {formData.deliveryMethod === 'delivery' && shipping === 0 && subtotal > 120000 && (
+          {formData.deliveryMethod === 'delivery' && shipping === 0 && displaySubtotal > 120000 && (
             <div className="text-xs text-green-600 text-right">
               * 120,000₮-с дээш хүргэлтийн нэмэлт төлбөр хөнгөлөгдсөн
             </div>

@@ -548,6 +548,12 @@ const ReorderPage = () => {
                                     <span className="text-gray-600">Гүйлгээний утга:</span>
                                     <span className="font-medium">{orderNumber}</span>
                                   </div>
+                                  <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
+                                <div className="flex flex-col gap-1">
+                                  <span className="text-red-700 font-semibold">Гүйлгээний утга дээр та:</span>
+                                  <span className="text-red-600 font-bold">Order Id, утасны дугаар мөн ААН нэгж бол регистрийн дугаараа бичнэ үү.</span>
+                                </div>
+                              </div>
                                 </div>
                               </CardContent>
                             </Card>
