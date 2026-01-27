@@ -335,9 +335,12 @@ const CheckoutPageContent = () => {
     return true;
   }, [invoiceFormData]);
 
-  const createOrderAndQPayInvoice = useCallback(async () => {
+  const createOrderAndQPayInvoice = useCallback(async (formDataOverride?: any) => {
     try {
       setIsProcessing(true);
+      
+      // Use override if provided, otherwise fall back to formData state
+      const currentFormData = formDataOverride || formData;
       
       const paymentMethodMap: Record<string, number> = {
         'qpay': 0,
@@ -346,12 +349,12 @@ const CheckoutPageContent = () => {
       };
       
       let fullShippingAddress = '';
-      if (formData.deliveryMethod === 'delivery') {
+      if (currentFormData.deliveryMethod === 'delivery') {
         const shippingAddressParts = [
-          formData.city,
-          formData.district && `Дүүрэг: ${formData.district}`,
-          formData.khoroo && `Хороо: ${formData.khoroo}`,
-          formData.address
+          currentFormData.city,
+          currentFormData.district && `Дүүрэг: ${currentFormData.district}`,
+          currentFormData.khoroo && `Хороо: ${currentFormData.khoroo}`,
+          currentFormData.address
         ].filter(Boolean);
         fullShippingAddress = shippingAddressParts.join(', ').trim();
         
@@ -381,11 +384,11 @@ const CheckoutPageContent = () => {
         grandTotal: total,
         paymentMethod: paymentMethodMap[paymentMethod] || 0,
         shippingAddress: fullShippingAddress,
-        district: formData.deliveryMethod === 'delivery' ? formData.district || null : null,
-        khoroo: formData.deliveryMethod === 'delivery' ? formData.khoroo || null : null,
-        phoneNumber: formData.phone,
-        customerName: formData.lastName ? `${formData.firstName} ${formData.lastName}`.trim() : formData.firstName.trim(),
-        notes: formData.note || null,
+        district: currentFormData.deliveryMethod === 'delivery' ? currentFormData.district || null : null,
+        khoroo: currentFormData.deliveryMethod === 'delivery' ? currentFormData.khoroo || null : null,
+        phoneNumber: currentFormData.phone,
+        customerName: currentFormData.lastName ? `${currentFormData.firstName} ${currentFormData.lastName}`.trim() : currentFormData.firstName.trim(),
+        notes: currentFormData.note || null,
         couponId: appliedCoupon?.coupon_id || null,
         couponDiscount: appliedCoupon?.discount || 0,
       };
@@ -596,7 +599,8 @@ const CheckoutPageContent = () => {
       }
 
       setStep(2);
-      await createOrderAndQPayInvoice();
+      // Pass currentFormData to ensure latest form values are used
+      await createOrderAndQPayInvoice(currentFormData);
     } catch (error) {
       console.error('Failed to proceed to payment:', error);
       alert('Төлбөрийн системд алдаа гарлаа. Дахин оролдоно уу.');
