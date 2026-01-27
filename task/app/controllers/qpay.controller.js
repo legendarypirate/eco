@@ -456,7 +456,7 @@ exports.createCheckoutInvoice = async (req, res) => {
         invoice_code: invoiceCode,
         sender_invoice_no: senderInvoiceNo,
         invoice_receiver_code: invoiceReceiverCode,
-        invoice_description: `${order.order_number}, ${order.phone_number}, ${order.customer_name}${description ? ` - ${description}` : ''}`,
+        invoice_description: `${order.phone_number}, ${order.customer_name}${description ? ` - ${description}` : ''}`,
         amount: parseFloat(amount)
       },
       {
