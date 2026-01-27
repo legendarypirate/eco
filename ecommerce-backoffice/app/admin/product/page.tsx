@@ -536,6 +536,58 @@ function ProductEditForm({ product, onCancel, onSave, isCreating = false, catego
     setForm((f) => ({ ...f, [key]: value }));
   }
 
+  // Calculate the third value when two of price, originalPrice, or discount are provided
+  const calculatePriceFields = (
+    price: number,
+    originalPrice: number | undefined,
+    discount: number,
+    changedField: 'price' | 'originalPrice' | 'discount'
+  ) => {
+    const priceVal = price || 0;
+    const originalPriceVal = originalPrice || 0;
+    const discountVal = discount || 0;
+
+    let newPrice = priceVal;
+    let newOriginalPrice = originalPriceVal;
+    let newDiscount = discountVal;
+
+    // If two fields are filled, calculate the third
+    if (changedField === 'price') {
+      // Price was changed
+      if (originalPriceVal > 0 && originalPriceVal >= priceVal) {
+        // Calculate discount from price and originalPrice
+        newDiscount = originalPriceVal > 0 ? ((originalPriceVal - priceVal) / originalPriceVal) * 100 : 0;
+      } else if (discountVal > 0 && discountVal < 100 && priceVal > 0) {
+        // Calculate originalPrice from price and discount
+        newOriginalPrice = priceVal / (1 - discountVal / 100);
+      }
+    } else if (changedField === 'originalPrice') {
+      // OriginalPrice was changed
+      if (priceVal > 0 && originalPriceVal > 0 && originalPriceVal >= priceVal) {
+        // Calculate discount from price and originalPrice
+        newDiscount = ((originalPriceVal - priceVal) / originalPriceVal) * 100;
+      } else if (discountVal > 0 && discountVal <= 100 && originalPriceVal > 0) {
+        // Calculate price from originalPrice and discount
+        newPrice = originalPriceVal * (1 - discountVal / 100);
+      }
+    } else if (changedField === 'discount') {
+      // Discount was changed
+      if (originalPriceVal > 0 && discountVal >= 0 && discountVal <= 100) {
+        // Calculate price from originalPrice and discount
+        newPrice = originalPriceVal * (1 - discountVal / 100);
+      } else if (priceVal > 0 && discountVal > 0 && discountVal < 100) {
+        // Calculate originalPrice from price and discount
+        newOriginalPrice = priceVal / (1 - discountVal / 100);
+      }
+    }
+
+    return {
+      price: Math.round(newPrice * 100) / 100,
+      originalPrice: newOriginalPrice > 0 ? Math.round(newOriginalPrice * 100) / 100 : undefined,
+      discount: Math.round(newDiscount * 100) / 100
+    };
+  };
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -944,7 +996,21 @@ function ProductEditForm({ product, onCancel, onSave, isCreating = false, catego
               <Input 
                 type="number" 
                 value={form.price} 
-                onChange={(e) => updateField('price', parseFloat(e.target.value) || 0)} 
+                onChange={(e) => {
+                  const newPrice = parseFloat(e.target.value) || 0;
+                  const calculated = calculatePriceFields(
+                    newPrice,
+                    form.originalPrice,
+                    form.discount,
+                    'price'
+                  );
+                  setForm((f) => ({
+                    ...f,
+                    price: calculated.price,
+                    originalPrice: calculated.originalPrice !== undefined ? calculated.originalPrice : f.originalPrice,
+                    discount: calculated.discount
+                  }));
+                }} 
                 placeholder="0"
                 min="0"
                 disabled={uploading}
@@ -954,8 +1020,23 @@ function ProductEditForm({ product, onCancel, onSave, isCreating = false, catego
               <label className="text-sm font-medium block mb-1">Анхны үнэ (₮)</label>
               <Input 
                 type="number" 
-                value={form.originalPrice || 0} 
-                onChange={(e) => updateField('originalPrice', parseFloat(e.target.value) || 0)} 
+                value={form.originalPrice || ''} 
+                onChange={(e) => {
+                  const inputValue = e.target.value;
+                  const newOriginalPrice = inputValue === '' ? undefined : (parseFloat(inputValue) || 0);
+                  const calculated = calculatePriceFields(
+                    form.price,
+                    newOriginalPrice,
+                    form.discount,
+                    'originalPrice'
+                  );
+                  setForm((f) => ({
+                    ...f,
+                    price: calculated.price,
+                    originalPrice: calculated.originalPrice !== undefined ? calculated.originalPrice : newOriginalPrice,
+                    discount: calculated.discount
+                  }));
+                }} 
                 placeholder="0"
                 min="0"
                 disabled={uploading}
@@ -966,15 +1047,27 @@ function ProductEditForm({ product, onCancel, onSave, isCreating = false, catego
               <Input 
                 type="number" 
                 value={form.discount} 
-                onChange={(e) => updateField('discount', parseFloat(e.target.value) || 0)} 
+                onChange={(e) => {
+                  const newDiscount = parseFloat(e.target.value) || 0;
+                  const calculated = calculatePriceFields(
+                    form.price,
+                    form.originalPrice,
+                    newDiscount,
+                    'discount'
+                  );
+                  setForm((f) => ({
+                    ...f,
+                    price: calculated.price,
+                    originalPrice: calculated.originalPrice !== undefined ? calculated.originalPrice : f.originalPrice,
+                    discount: calculated.discount
+                  }));
+                }} 
                 placeholder="0"
                 min="0"
                 max="100"
                 disabled={uploading}
-                readOnly
-                className="bg-gray-50"
               />
-              <p className="text-xs text-gray-500 mt-1">Анхны үнэ болон үнээс автоматаар тооцоолно</p>
+              <p className="text-xs text-gray-500 mt-1">Дурын хоёр утга оруулахад гурав дахь нь автоматаар тооцоолно</p>
             </div>
           </div>
 
