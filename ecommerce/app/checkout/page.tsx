@@ -490,7 +490,7 @@ const CheckoutPageContent = () => {
         body: JSON.stringify({
           orderId: createdOrder.id,
           amount: qpayAmount,
-          description: `Захиалга - ${createdOrder.order_number}`
+          description: `Tsaas.mn - ${createdOrder.order_number}`
         }),
       });
 
