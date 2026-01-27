@@ -29,8 +29,8 @@ const OrderSummary = ({
         <h2 className="text-lg font-bold text-gray-900 mb-6">Захиалгын дэлгэрэнгүй</h2>
         
         <div className="space-y-4 mb-6 max-h-96 overflow-y-auto pr-2">
-          {cartItems.map((item) => (
-            <div key={item.id} className="flex items-center justify-between">
+          {cartItems.map((item, index) => (
+            <div key={`${item.id}-${item.selectedSize || ''}-${item.selectedColor || ''}-${index}`} className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-gray-100 rounded-md flex items-center justify-center overflow-hidden">
                   {item.product.image ? (
