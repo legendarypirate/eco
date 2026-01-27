@@ -33,7 +33,7 @@ import {
 // Validation schema
 const formSchema = z.object({
   firstName: z.string().min(1, 'Нэр оруулна уу'),
-  lastName: z.string().min(1, 'Овог оруулна уу'),
+  lastName: z.string().optional(),
   phone: z.string().regex(/^\d{8}$/, 'Утасны дугаар 8 оронтой байх ёстой'),
   email: z.string().email('Имэйл хаяг буруу байна').optional().or(z.literal('')),
   city: z.string().min(1, 'Хот сонгоно уу'),
@@ -264,7 +264,7 @@ const Step1Content = ({
                 name="lastName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Овог *</FormLabel>
+                    <FormLabel>Овог</FormLabel>
                     <FormControl>
                       <Input {...field} />
                     </FormControl>

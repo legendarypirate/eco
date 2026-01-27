@@ -290,7 +290,7 @@ const CheckoutPageContent = () => {
   }, []);
 
   const validateForm = useCallback(() => {
-    const requiredFields = ['firstName', 'lastName', 'phone'];
+    const requiredFields = ['firstName', 'phone'];
     
     if (formData.deliveryMethod === 'delivery') {
       requiredFields.push('address', 'city');
@@ -384,7 +384,7 @@ const CheckoutPageContent = () => {
         district: formData.deliveryMethod === 'delivery' ? formData.district || null : null,
         khoroo: formData.deliveryMethod === 'delivery' ? formData.khoroo || null : null,
         phoneNumber: formData.phone,
-        customerName: `${formData.firstName} ${formData.lastName}`.trim(),
+        customerName: formData.lastName ? `${formData.firstName} ${formData.lastName}`.trim() : formData.firstName.trim(),
         notes: formData.note || null,
         couponId: appliedCoupon?.coupon_id || null,
         couponDiscount: appliedCoupon?.discount || 0,
@@ -532,7 +532,7 @@ const CheckoutPageContent = () => {
     const currentFormData = data || formData;
     
     // Validate using the current form data
-    const requiredFields = ['firstName', 'lastName', 'phone'];
+    const requiredFields = ['firstName', 'phone'];
     
     if (currentFormData.deliveryMethod === 'delivery') {
       requiredFields.push('address', 'city');
@@ -608,13 +608,21 @@ const CheckoutPageContent = () => {
       if (currentOrderId) {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
         try {
-          await fetch(`${API_URL}/order/${currentOrderId}/delivery/chuchu`, {
+          const chuchuResponse = await fetch(`${API_URL}/order/${currentOrderId}/delivery/chuchu`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               ...(isAuthenticated && { 'Authorization': `Bearer ${localStorage.getItem('token')}` }),
             },
           });
+          
+          if (chuchuResponse.ok) {
+            const chuchuResult = await chuchuResponse.json();
+            console.log('Chuchu API called successfully after payment:', chuchuResult);
+          } else {
+            const errorData = await chuchuResponse.json().catch(() => ({}));
+            console.warn('Chuchu API call failed after payment:', errorData);
+          }
         } catch (chuchuError) {
           console.error('Chuchu API error after payment:', chuchuError);
         }
@@ -688,11 +696,6 @@ const CheckoutPageContent = () => {
       return;
     }
     
-    if (!currentFormData.lastName || currentFormData.lastName.trim() === '') {
-      alert('Та овог-оо оруулна уу.');
-      return;
-    }
-    
     if (!currentFormData.phone || currentFormData.phone.trim() === '') {
       alert('Та утасны дугаар-аа оруулна уу.');
       return;
@@ -754,7 +757,9 @@ const CheckoutPageContent = () => {
         paymentMethod: 1,
         shippingAddress: fullShippingAddress,
         phoneNumber: invoiceFormData.phone || (latestFormDataForInvoice || formData).phone,
-        customerName: invoiceFormData.name || `${(latestFormDataForInvoice || formData).firstName} ${(latestFormDataForInvoice || formData).lastName}`.trim(),
+        customerName: invoiceFormData.name || ((latestFormDataForInvoice || formData).lastName 
+          ? `${(latestFormDataForInvoice || formData).firstName} ${(latestFormDataForInvoice || formData).lastName}`.trim()
+          : (latestFormDataForInvoice || formData).firstName.trim()),
         notes: (latestFormDataForInvoice || formData).note || null,
         invoiceData: {
           name: invoiceFormData.name,
@@ -932,7 +937,9 @@ const CheckoutPageContent = () => {
         invoiceNumber: createdOrder.order_number || `INV-${createdOrder.id}`,
         invoiceDate: formatDate(today),
         dueDate: formatDate(dueDate),
-        customerName: invoiceFormData.name || `${(latestFormDataForInvoice || formData).firstName} ${(latestFormDataForInvoice || formData).lastName}`.trim(),
+        customerName: invoiceFormData.name || ((latestFormDataForInvoice || formData).lastName 
+          ? `${(latestFormDataForInvoice || formData).firstName} ${(latestFormDataForInvoice || formData).lastName}`.trim()
+          : (latestFormDataForInvoice || formData).firstName.trim()),
         customerEmail: invoiceFormData.email || (latestFormDataForInvoice || formData).email || '',
         customerPhone: invoiceFormData.phone || (latestFormDataForInvoice || formData).phone || '',
         issuerName: 'ТЭРГҮҮН ГЭРЭГЭ ХХК',
