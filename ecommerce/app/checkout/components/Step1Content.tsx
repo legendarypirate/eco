@@ -500,7 +500,7 @@ const Step1Content = ({
                         <div className="flex-1">
                           <div className="font-medium">Хүргэлтээр</div>
                           <div className="text-sm text-gray-600 mt-1">
-                            {subtotal > 120000 ? 'Үнэгүй' : `${formatPrice(8800)}`} - 2-3 хоногт
+                            {subtotal > 120000 ? 'Үнэгүй' : `${formatPrice(8800)}`} - 24 цагт
                           </div>
                           <div className="text-xs text-gray-500 mt-2">
                             Таны зааж өгсөн хаягт хүргэж өгнө
