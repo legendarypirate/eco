@@ -264,7 +264,7 @@ exports.findAll = async (req, res) => {
   try {
     const { 
       category, categoryId, subcategory, minPrice, maxPrice, brand, 
-      inStock, isOnSale, isNew, isFeatured, rating, search, q, sortBy, 
+      inStock, isOnSale, isNew, isFeatured, isBestSeller, rating, search, q, sortBy, 
       page = 1, limit = 10, includeVariations = 'true'
     } = req.query;
     
@@ -313,6 +313,7 @@ exports.findAll = async (req, res) => {
     if (isOnSale !== undefined) where.isOnSale = isOnSale === 'true';
     if (isNew !== undefined) where.isNew = isNew === 'true';
     if (isFeatured !== undefined) where.isFeatured = isFeatured === 'true';
+    if (isBestSeller !== undefined) where.isBestSeller = isBestSeller === 'true';
     if (brand) where.brand = brand;
     
     // Price range filter

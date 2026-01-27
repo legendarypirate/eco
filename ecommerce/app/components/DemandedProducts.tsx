@@ -33,17 +33,19 @@ const DemandedProducts: React.FC<DemandedProductsProps> = ({ products: propsProd
       setError(null);
       
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-      const response = await fetch(`${API_URL}/products/demanded?limit=12`);
+      const response = await fetch(`${API_URL}/products?isBestSeller=true&limit=12`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      const demandedProducts: Product[] = await response.json();
+      const data = await response.json();
+      // Handle both response formats: direct array or object with products array
+      const demandedProducts: Product[] = Array.isArray(data) ? data : (data.products || []);
       setProducts(demandedProducts);
     } catch (err) {
-      console.error('Error fetching demanded products:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch demanded products');
+      console.error('Error fetching bestseller products:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch bestseller products');
     } finally {
       setLoading(false);
     }
@@ -197,8 +199,8 @@ const DemandedProducts: React.FC<DemandedProductsProps> = ({ products: propsProd
         <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-10">
             <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
-              <span className="text-gray-800">Хамгийн</span>{' '}
-              <span className="text-amber-700">Эрэлттэй</span>
+              <span className="text-gray-800">Их</span>{' '}
+              <span className="text-amber-700">зарагдсан</span>
             </h2>
             <p className="text-gray-500 text-sm">Ачаалж байна...</p>
           </div>
@@ -246,8 +248,8 @@ const DemandedProducts: React.FC<DemandedProductsProps> = ({ products: propsProd
             <div className="text-gray-400 mb-4">
               <ShoppingCart className="w-12 h-12 mx-auto" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Эрэлттэй бүтээгдэхүүн байхгүй</h3>
-            <p className="text-gray-500">Эрэлттэй бүтээгдэхүүн одоогоор бэлэн болоогүй байна.</p>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Их зарагдсан бүтээгдэхүүн байхгүй</h3>
+            <p className="text-gray-500">Их зарагдсан бүтээгдэхүүн одоогоор бэлэн болоогүй байна.</p>
           </div>
         </div>
       </section>
@@ -266,19 +268,12 @@ const DemandedProducts: React.FC<DemandedProductsProps> = ({ products: propsProd
               <div className="relative px-4">
                 <span className="text-gray-800 font-medium text-sm tracking-wider bg-white/80 backdrop-blur-sm px-4 py-1.5 rounded-lg border border-gray-200/60 flex items-center space-x-2">
                   <div className="w-1.5 h-1.5 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full animate-pulse"></div>
-                  <span>Эрэлттэй бүтээгдэхүүн</span>
+                  <span>Их зарагдсан бүтээгдэхүүн</span>
                 </span>
               </div>
             </div>
           </div>
-          
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
-            <span className="text-gray-800">Хамгийн</span>{' '}
-            <span className="text-amber-700">Эрэлттэй</span>
-          </h2>
-          <p className="text-gray-500 text-sm max-w-xl mx-auto">
-            Хэрэглэгчдийн сонголт болсон шилдэг бараанууд
-          </p>
+         
         </div>
 
         {/* Products Grid with amber accent and hot badges */}
@@ -437,17 +432,11 @@ const DemandedProducts: React.FC<DemandedProductsProps> = ({ products: propsProd
               <div className="h-px w-8 bg-gray-300"></div>
               <span className="flex items-center space-x-1">
                 <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                <span>Хамгийн их захиалагдсан</span>
+                <span>Их зарагдсан</span>
               </span>
               <div className="h-px w-8 bg-gray-300"></div>
             </div>
             
-            <button className="group inline-flex items-center space-x-2 px-4 py-2 bg-white text-amber-700 rounded-lg border border-amber-300/50 hover:border-amber-400 hover:bg-amber-50 hover:shadow transition-all duration-300 text-sm font-medium">
-              <span>Илүү их эрэлттэй бараа</span>
-              <svg className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
           </div>
         </div>
       </div>
