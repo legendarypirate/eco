@@ -5,24 +5,26 @@ import html2canvas from 'html2canvas';
 function numberToMongolianWords(num: number): string {
   if (num === 0) return 'тэг төгрөг';
   
-  const ones = ['', 'нэг', 'хоёр', 'гурав', 'дөрөв', 'тав', 'зургаа', 'долоо', 'найм', 'ес'];
   const attributiveOnes = ['', 'нэг', 'хоёр', 'гурван', 'дөрвөн', 'таван', 'зургаан', 'долоон', 'найман', 'есөн'];
   const tensWords = ['', 'арав', 'хорин', 'гучин', 'дөчин', 'тавин', 'жаран', 'далан', 'наян', 'ерэн'];
   const scales = ['', 'мянга', 'сая', 'тэрбум', 'их наяд'];
   
-  const integerPart = Math.floor(num);
-  const decimalPart = Math.round((num - integerPart) * 100);
+  // Round to 2 decimal places to avoid floating point issues
+  const roundedNum = Math.round(num * 100) / 100;
+  const integerPart = Math.floor(roundedNum);
+  const decimalPart = Math.round((roundedNum - integerPart) * 100);
   
   if (integerPart === 0) {
     return 'тэг төгрөг';
   }
   
   const parts: string[] = [];
-  let chunkIndex = 0;
   let remaining = integerPart;
+  let scaleIndex = 0;
   
   while (remaining > 0) {
     const chunk = remaining % 1000;
+    
     if (chunk > 0) {
       const chunkWords: string[] = [];
       
@@ -47,14 +49,52 @@ function numberToMongolianWords(num: number): string {
         }
       }
       
-      const scale = chunkIndex > 0 && scales[chunkIndex] ? ' ' + scales[chunkIndex] : '';
-      parts.unshift(chunkWords.join(' ') + scale);
+      // Add scale for thousands, millions, etc.
+      if (scaleIndex > 0 && scaleIndex < scales.length && scales[scaleIndex]) {
+        // Special case: "нэг мянган" instead of "нэг мянга"
+        if (scaleIndex === 1 && chunk === 1) {
+          chunkWords.push('мянган');
+        } else {
+          chunkWords.push(scales[scaleIndex]);
+        }
+      }
+      
+      parts.unshift(chunkWords.join(' '));
+    } else if (scaleIndex > 0 && remaining > 0) {
+      // Handle exact thousands: if chunk is 0 but remaining > 0, 
+      // the next iteration will add the number part with the scale
     }
+    
     remaining = Math.floor(remaining / 1000);
-    chunkIndex++;
+    scaleIndex++;
   }
   
-  return parts.join(' ') + ' төгрөг';
+  let result = parts.join(' ') + ' төгрөг';
+  
+  // Add decimal part (мөнгө) if exists
+  if (decimalPart > 0 && decimalPart < 100) {
+    const decimalWords: string[] = [];
+    if (decimalPart < 10) {
+      decimalWords.push(attributiveOnes[decimalPart]);
+    } else if (decimalPart === 10) {
+      decimalWords.push(tensWords[1]);
+    } else if (decimalPart < 20) {
+      decimalWords.push('арван ' + attributiveOnes[decimalPart - 10]);
+    } else {
+      const tens = Math.floor(decimalPart / 10);
+      const units = decimalPart % 10;
+      if (units > 0 && attributiveOnes[units]) {
+        decimalWords.push(tensWords[tens] + ' ' + attributiveOnes[units]);
+      } else if (tensWords[tens]) {
+        decimalWords.push(tensWords[tens]);
+      }
+    }
+    if (decimalWords.length > 0) {
+      result += ' ' + decimalWords.join(' ') + ' мөнгө';
+    }
+  }
+  
+  return result;
 }
 
 interface InvoiceItem {
@@ -80,6 +120,7 @@ interface InvoiceData {
   issuerBankAccount: string;
   issuerBankIban: string;
   issuerBankAccountHolder?: string;
+  orderId?: string;
   items: InvoiceItem[];
   subtotal: number; // Without VAT
   tax: number; // VAT amount
@@ -99,6 +140,9 @@ export async function generateInvoicePDF(data: InvoiceData): Promise<void> {
   invoiceDiv.style.lineHeight = '1.3';
   invoiceDiv.style.color = '#000';
   invoiceDiv.style.background = 'white';
+  
+  // Calculate tax multiplier to convert prices without VAT to prices with VAT
+  const taxMultiplier = data.subtotal > 0 ? data.total / data.subtotal : 1;
   
   const totalInWords = numberToMongolianWords(data.total);
   
@@ -132,12 +176,12 @@ export async function generateInvoicePDF(data: InvoiceData): Promise<void> {
           </div>
           <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
             <span style="font-weight: bold; min-width: 120px;">Банкны данс:</span>
-            <span>${data.issuerBankName || '-'} ${data.issuerBankAccount ? '- ' + data.issuerBankAccount : ''} ${data.issuerBankIban ? '(' + data.issuerBankIban + ')' : ''}</span>
+            <span>${data.issuerBankAccount ? data.issuerBankAccount + ' (Голомт банк)' : '-'}</span>
           </div>
-          ${data.issuerBankAccountHolder ? `
+          ${data.orderId ? `
           <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-            <span style="font-weight: bold; min-width: 120px;">Дансны эзэмшигч:</span>
-            <span>${data.issuerBankAccountHolder}</span>
+            <span style="font-weight: bold; min-width: 120px;">Гүйлгээний утга:</span>
+            <span style="font-weight: bold;">${data.orderId}</span>
           </div>
           ` : ''}
         </div>
@@ -178,27 +222,25 @@ export async function generateInvoicePDF(data: InvoiceData): Promise<void> {
           </tr>
         </thead>
         <tbody>
-          ${data.items.map((item, index) => `
+          ${data.items.map((item, index) => {
+            // Convert prices without VAT to prices with VAT for display
+            const priceWithVat = item.price * taxMultiplier;
+            const totalWithVat = item.total * taxMultiplier;
+            return `
             <tr>
               <td style="padding: 6px 6px; border-bottom: 1px solid #ddd; font-size: 9pt;">${index + 1}</td>
               <td style="padding: 6px 6px; border-bottom: 1px solid #ddd; font-size: 9pt;">${item.description}</td>
               <td style="padding: 6px 6px; border-bottom: 1px solid #ddd; font-size: 9pt; text-align: right;">${item.quantity.toFixed(0)}</td>
-              <td style="padding: 6px 6px; border-bottom: 1px solid #ddd; font-size: 9pt; text-align: right;">${item.price.toFixed(2)} ₮</td>
-              <td style="padding: 6px 6px; border-bottom: 1px solid #ddd; font-size: 9pt; text-align: right;">${item.total.toFixed(2)} ₮</td>
+              <td style="padding: 6px 6px; border-bottom: 1px solid #ddd; font-size: 9pt; text-align: right;">${Math.round(priceWithVat).toFixed(0)} ₮</td>
+              <td style="padding: 6px 6px; border-bottom: 1px solid #ddd; font-size: 9pt; text-align: right;">${Math.round(totalWithVat).toFixed(0)} ₮</td>
             </tr>
-          `).join('')}
+          `;
+          }).join('')}
         </tbody>
       </table>
       
       <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #333;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 10pt;">
-          <span>Нийт дүн:</span>
-          <span>${data.subtotal.toFixed(2)} ₮</span>
-        </div>
-        <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 10pt;">
-          <span>НӨАТ (10%):</span>
-          <span>${data.tax.toFixed(2)} ₮</span>
-        </div>
+        
         <div style="display: flex; justify-content: space-between; margin-top: 8px; padding-top: 8px; border-top: 1px solid #ddd; font-size: 11pt; font-weight: bold; color: #e74c3c;">
           <span>Татвартай нийт дүн:</span>
           <span>${data.total.toFixed(2)} ₮</span>

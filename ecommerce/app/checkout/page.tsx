@@ -957,7 +957,7 @@ const CheckoutPageContent = () => {
       // Format dates
       const today = new Date();
       const dueDate = new Date(today);
-      dueDate.setDate(dueDate.getDate() + 30); // 30 days from today
+      dueDate.setDate(dueDate.getDate() + 7); // 7 days from today
       
       const formatDate = (date: Date) => {
         return date.toISOString().split('T')[0];
@@ -982,6 +982,7 @@ const CheckoutPageContent = () => {
         issuerBankAccount: '26000 500 5003966474',
         issuerBankIban: '',
         issuerBankAccountHolder: 'Idersaikhan',
+        orderId: createdOrder.order_number || `INV-${createdOrder.id}`,
         items: invoiceItems,
         subtotal: subtotalWithoutVat,
         tax: calculatedTax,
