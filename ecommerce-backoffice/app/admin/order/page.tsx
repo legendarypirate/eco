@@ -37,6 +37,8 @@ type Order = {
   customer_name?: string;
   customer_phone?: string;
   address?: string;
+  district?: string;
+  khoroo?: string;
 };
 
 export default function AdminOrderList() {
@@ -90,6 +92,58 @@ function OrderPage() {
     return `${year}-${month}-${day} ${hours}:${minutes}`;
   };
 
+  // Parse address components from shipping_address string
+  const parseAddressComponents = (shippingAddress: string) => {
+    if (!shippingAddress || shippingAddress === 'Ирж авах') {
+      return {
+        city: '',
+        district: '',
+        khoroo: '',
+        address: shippingAddress || ''
+      };
+    }
+
+    const addressParts = shippingAddress.split(',').map(part => part.trim());
+    
+    let city = '';
+    let district = '';
+    let khoroo = '';
+    let address = '';
+
+    // First part is usually the city
+    if (addressParts.length > 0) {
+      city = addressParts[0];
+    }
+
+    // Find district (Дүүрэг: ...)
+    const districtIndex = addressParts.findIndex(part => part.startsWith('Дүүрэг:'));
+    if (districtIndex !== -1) {
+      district = addressParts[districtIndex].replace('Дүүрэг:', '').trim();
+    }
+
+    // Find khoroo (Хороо: ...)
+    const khorooIndex = addressParts.findIndex(part => part.startsWith('Хороо:'));
+    if (khorooIndex !== -1) {
+      khoroo = addressParts[khorooIndex].replace('Хороо:', '').trim();
+    }
+
+    // Everything after district/khoroo is the detailed address
+    const addressStartIndex = Math.max(
+      districtIndex !== -1 ? districtIndex + 1 : 0,
+      khorooIndex !== -1 ? khorooIndex + 1 : 0,
+      1 // At least start from index 1 (after city)
+    );
+    
+    if (addressParts.length > addressStartIndex) {
+      address = addressParts.slice(addressStartIndex).join(', ').trim();
+    } else {
+      // Fallback: if no detailed address found, use the full string minus city/district/khoroo
+      address = shippingAddress;
+    }
+
+    return { city, district, khoroo, address };
+  };
+
   // Fetch orders from API
   const fetchOrders = async () => {
     try {
@@ -105,21 +159,27 @@ function OrderPage() {
       
       if (data.success && data.orders) {
         // Transform backend data to frontend format
-        const transformedOrders: Order[] = data.orders.map((order: any) => ({
-          id: order.order_number || String(order.id),
-          created_at: formatDate(order.created_at),
-          status: mapOrderStatus(order.order_status),
-          payment_status: mapPaymentStatus(order.payment_status),
-          items: (order.items || []).map((item: any) => ({
-            name: item.name || item.name_mn || "Бараа",
-            qty: item.quantity || 1,
-            price: parseFloat(item.price) || 0,
-          })),
-          total: parseFloat(order.grand_total) || 0,
-          customer_name: order.customer_name,
-          customer_phone: order.phone_number,
-          address: order.shipping_address,
-        }));
+        const transformedOrders: Order[] = data.orders.map((order: any) => {
+          const addressComponents = parseAddressComponents(order.shipping_address || '');
+          return {
+            id: order.order_number || String(order.id),
+            created_at: formatDate(order.created_at),
+            status: mapOrderStatus(order.order_status),
+            payment_status: mapPaymentStatus(order.payment_status),
+            items: (order.items || []).map((item: any) => ({
+              name: item.name || item.name_mn || "Бараа",
+              qty: item.quantity || 1,
+              price: parseFloat(item.price) || 0,
+            })),
+            total: parseFloat(order.grand_total) || 0,
+            customer_name: order.customer_name,
+            customer_phone: order.phone_number,
+            address: addressComponents.address,
+            // Use database fields first, fallback to parsed values
+            district: order.district || addressComponents.district || null,
+            khoroo: order.khoroo || addressComponents.khoroo || null,
+          };
+        });
         
         setOrders(transformedOrders);
       } else {
@@ -418,7 +478,14 @@ function OrderPage() {
                 <p className="text-sm text-gray-600">Үүссэн: {order.created_at}</p>
                 {order.customer_name && (
                   <p className="text-sm">
-                    <span className="font-medium">Харилцагч:</span> {order.customer_name} ({order.customer_phone})
+                    <span className="font-medium">Харилцагч:</span> {order.customer_name}
+                    {order.customer_phone && ` (${order.customer_phone})`}
+                  </p>
+                )}
+                {order.district && (
+                  <p className="text-sm text-gray-600">
+                    <span className="font-medium">Дүүрэг:</span> {order.district}
+                    {order.khoroo && `, Хороо: ${order.khoroo}`}
                   </p>
                 )}
               </div>
@@ -516,9 +583,11 @@ function OrderPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <h4 className="font-semibold">Харилцагчийн мэдээлэл</h4>
-                  <p>Нэр: {selectedOrder.customer_name}</p>
-                  <p>Утас: {selectedOrder.customer_phone}</p>
-                  <p>Хаяг: {selectedOrder.address}</p>
+                  <p>Нэр: {selectedOrder.customer_name || '-'}</p>
+                  <p>Утас: {selectedOrder.customer_phone || '-'}</p>
+                  {selectedOrder.district && <p>Дүүрэг: {selectedOrder.district}</p>}
+                  {selectedOrder.khoroo && <p>Хороо: {selectedOrder.khoroo}</p>}
+                  <p>Хаяг: {selectedOrder.address || '-'}</p>
                 </div>
                 <div>
                   <h4 className="font-semibold">Захиалгын мэдээлэл</h4>

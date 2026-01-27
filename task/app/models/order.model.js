@@ -57,6 +57,16 @@ module.exports = (sequelize, Sequelize) => {
             type: Sequelize.TEXT,
             allowNull: false
         },
+        district: {
+            type: Sequelize.STRING(100),
+            allowNull: true,
+            comment: "Дүүрэг (District)"
+        },
+        khoroo: {
+            type: Sequelize.STRING(100),
+            allowNull: true,
+            comment: "Хороо (Khoroo)"
+        },
         phone_number: {
             type: Sequelize.STRING(50),
             allowNull: false

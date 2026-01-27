@@ -381,6 +381,8 @@ const CheckoutPageContent = () => {
         grandTotal: total,
         paymentMethod: paymentMethodMap[paymentMethod] || 0,
         shippingAddress: fullShippingAddress,
+        district: formData.deliveryMethod === 'delivery' ? formData.district || null : null,
+        khoroo: formData.deliveryMethod === 'delivery' ? formData.khoroo || null : null,
         phoneNumber: formData.phone,
         customerName: `${formData.firstName} ${formData.lastName}`.trim(),
         notes: formData.note || null,

@@ -121,6 +121,58 @@ const saveAddressFromOrder = async (order) => {
   }
 };
 
+// Helper function to parse address components from shipping_address string
+const parseAddressComponents = (shippingAddress) => {
+  if (!shippingAddress || shippingAddress === 'Ирж авах') {
+    return {
+      city: '',
+      district: '',
+      khoroo: '',
+      address: shippingAddress || ''
+    };
+  }
+
+  const addressParts = shippingAddress.split(',').map(part => part.trim());
+  
+  let city = '';
+  let district = '';
+  let khoroo = '';
+  let address = '';
+
+  // First part is usually the city
+  if (addressParts.length > 0) {
+    city = addressParts[0];
+  }
+
+  // Find district (Дүүрэг: ...)
+  const districtIndex = addressParts.findIndex(part => part.startsWith('Дүүрэг:'));
+  if (districtIndex !== -1) {
+    district = addressParts[districtIndex].replace('Дүүрэг:', '').trim();
+  }
+
+  // Find khoroo (Хороо: ...)
+  const khorooIndex = addressParts.findIndex(part => part.startsWith('Хороо:'));
+  if (khorooIndex !== -1) {
+    khoroo = addressParts[khorooIndex].replace('Хороо:', '').trim();
+  }
+
+  // Everything after district/khoroo is the detailed address
+  const addressStartIndex = Math.max(
+    districtIndex !== -1 ? districtIndex + 1 : 0,
+    khorooIndex !== -1 ? khorooIndex + 1 : 0,
+    1 // At least start from index 1 (after city)
+  );
+  
+  if (addressParts.length > addressStartIndex) {
+    address = addressParts.slice(addressStartIndex).join(', ').trim();
+  } else {
+    // Fallback: if no detailed address found, use the full string minus city/district/khoroo
+    address = shippingAddress;
+  }
+
+  return { city, district, khoroo, address };
+};
+
 // Helper function to call e-chuchu API
 const callChuchuAPI = async (order, options = {}) => {
   try {
@@ -137,6 +189,14 @@ const callChuchuAPI = async (order, options = {}) => {
       return { success: false, reason: 'no_items' };
     }
 
+    // Parse address components
+    const addressComponents = parseAddressComponents(shippingAddress);
+    
+    // Use provided khoroo/district from options, or from order fields, or parse from address
+    const district = options.district || order.district || addressComponents.district || '';
+    const khoroo = options.khoroo || order.khoroo || addressComponents.khoroo || '';
+    const detailedAddress = addressComponents.address || shippingAddress;
+
     // Prepare parcel info for chuchu
     const parcelInfo = order.items.map(item => 
       `${item.name_mn || item.name} x${item.quantity}`
@@ -144,16 +204,24 @@ const callChuchuAPI = async (order, options = {}) => {
 
     const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
 
+    // Build full address string with district and khoroo
+    const fullAddressParts = [];
+    if (addressComponents.city) fullAddressParts.push(addressComponents.city);
+    if (district) fullAddressParts.push(`Дүүрэг: ${district}`);
+    if (khoroo) fullAddressParts.push(`Хороо: ${khoroo}`);
+    if (detailedAddress) fullAddressParts.push(detailedAddress);
+    const fullAddress = fullAddressParts.join(', ');
+
     // Call chuchu API
     const chuchuUrl = "https://e-chuchu.mn/api/v1/tsaas/delivery/create";
     const chuchuData = {
       order_code: order.order_number,
       receivername: order.customer_name || options.phone || order.phone_number,
       parcel_info: parcelInfo,
-      phone: options.phone || order.phone_number,
+      phone: options.phone || order.phone_number || "",
       phone2: "",
-      address: shippingAddress,
-      comment: options.comment || options.khoroo || "",
+      address: fullAddress || shippingAddress,
+      comment: options.comment || khoroo || "",
       number: totalItems,
       price: order.grand_total.toString(),
       track: order.id.toString()
@@ -486,6 +554,8 @@ exports.checkPaymentStatus = async (req, res) => {
           // Call chuchu API with the address from the order
           const chuchuResult = await callChuchuAPI(orderWithItems, {
             address: shippingAddress,
+            district: orderWithItems.district,
+            khoroo: orderWithItems.khoroo,
             phone: orderWithItems.phone_number || '',
             comment: ""
           });
@@ -597,6 +667,8 @@ exports.paymentWebhook = async (req, res) => {
           // Call chuchu API with the address from the order
           const chuchuResult = await callChuchuAPI(orderWithItems, {
             address: shippingAddress,
+            district: orderWithItems.district,
+            khoroo: orderWithItems.khoroo,
             phone: orderWithItems.phone_number || '',
             comment: ""
           });
