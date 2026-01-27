@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, CreditCard, Truck, MapPin, User, Phone, Mail, Lock, Home, FileText, Check } from 'lucide-react';
@@ -65,7 +65,7 @@ interface Step1ContentProps {
   handleKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
   handleProceedToPayment: (data: any) => Promise<void>;
   handleCreateInvoice: (e?: React.MouseEvent, formDataOverride?: any) => Promise<void>;
-  handleDeliveryMethodChange: (deliveryMethod: string) => void;
+  handleDeliveryMethodChange: (deliveryMethod: string, addressFields?: { city?: string; district?: string; khoroo?: string; address?: string }) => void;
   isAuthenticated: boolean;
   subtotal: number;
   total: number;
@@ -98,6 +98,7 @@ const Step1Content = ({
   const router = useRouter();
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [loadingAddresses, setLoadingAddresses] = useState(false);
+  const prevFormDataRef = useRef(formData);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -151,20 +152,44 @@ const Step1Content = ({
     }
   }, [isAuthenticated, form, formData.address, deliveryMethod]);
 
-  // Sync formData from parent when it changes
+  // Sync formData from parent when it changes, but preserve current form values
   useEffect(() => {
-    form.reset({
-      firstName: formData.firstName || '',
-      lastName: formData.lastName || '',
-      phone: formData.phone || '',
-      email: formData.email || '',
-      city: formData.city || 'Улаанбаатар',
-      district: formData.district || '',
-      khoroo: formData.khoroo || '',
-      address: formData.address || '',
-      note: formData.note || '',
-      deliveryMethod: formData.deliveryMethod || 'delivery',
-    });
+    const currentFormValues = form.getValues();
+    const prevFormData = prevFormDataRef.current;
+    
+    // Check if only deliveryMethod changed
+    const onlyDeliveryMethodChanged = 
+      prevFormData.deliveryMethod !== formData.deliveryMethod &&
+      prevFormData.firstName === formData.firstName &&
+      prevFormData.lastName === formData.lastName &&
+      prevFormData.phone === formData.phone &&
+      prevFormData.email === formData.email &&
+      prevFormData.city === formData.city &&
+      prevFormData.district === formData.district &&
+      prevFormData.khoroo === formData.khoroo &&
+      prevFormData.address === formData.address &&
+      prevFormData.note === formData.note;
+    
+    if (onlyDeliveryMethodChanged) {
+      // Only update deliveryMethod, preserve all other current form values
+      form.setValue('deliveryMethod', formData.deliveryMethod || 'delivery');
+    } else {
+      // Full reset, but preserve current form values for fields that parent doesn't have
+      form.reset({
+        firstName: formData.firstName !== undefined && formData.firstName !== '' ? formData.firstName : currentFormValues.firstName || '',
+        lastName: formData.lastName !== undefined && formData.lastName !== '' ? formData.lastName : currentFormValues.lastName || '',
+        phone: formData.phone !== undefined && formData.phone !== '' ? formData.phone : currentFormValues.phone || '',
+        email: formData.email !== undefined && formData.email !== '' ? formData.email : currentFormValues.email || '',
+        city: formData.city !== undefined && formData.city !== '' ? formData.city : currentFormValues.city || 'Улаанбаатар',
+        district: formData.district !== undefined ? formData.district : currentFormValues.district || '',
+        khoroo: formData.khoroo !== undefined ? formData.khoroo : currentFormValues.khoroo || '',
+        address: formData.address !== undefined ? formData.address : currentFormValues.address || '',
+        note: formData.note !== undefined ? formData.note : currentFormValues.note || '',
+        deliveryMethod: formData.deliveryMethod || currentFormValues.deliveryMethod || 'delivery',
+      });
+    }
+    
+    prevFormDataRef.current = formData;
   }, [formData, form]);
 
   // Handle selecting a saved address
@@ -457,7 +482,15 @@ const Step1Content = ({
                     <RadioGroup
                       onValueChange={(value) => {
                         field.onChange(value);
-                        handleDeliveryMethodChange(value);
+                        // Get current form values to preserve address fields
+                        const currentFormValues = form.getValues();
+                        // Update parent state with delivery method AND current address fields
+                        handleDeliveryMethodChange(value, {
+                          city: currentFormValues.city,
+                          district: currentFormValues.district,
+                          khoroo: currentFormValues.khoroo,
+                          address: currentFormValues.address,
+                        });
                       }}
                       value={field.value}
                       className="flex flex-col space-y-3"

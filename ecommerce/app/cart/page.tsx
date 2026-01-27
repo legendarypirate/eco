@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { 
   Trash2, Plus, Minus, ShoppingBag, ArrowLeft, 
   CreditCard, Truck, Shield, User, Lock, Heart,
-  Tag, Eye, EyeOff, Mail, Facebook, Chrome, X, AlertCircle, CheckCircle
+  Tag, Eye, EyeOff, Mail, Facebook, Chrome, X, AlertCircle, CheckCircle, Gift
 } from 'lucide-react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -109,17 +109,21 @@ useEffect(() => {
     removeFromCart(id);
   };
 
-  // Calculate cart totals
-  const subtotal = cartItems.reduce((sum, item) => {
-    return sum + (item.product.price * item.quantity);
-  }, 0);
+  // Calculate cart totals (excluding gift items - they are free)
+  const subtotal = cartItems
+    .filter(item => !item.isGift)
+    .reduce((sum, item) => {
+      return sum + (item.product.price * item.quantity);
+    }, 0);
 
-  const discount = cartItems.reduce((sum, item) => {
-    const originalPrice = item.product.originalPrice || item.product.price;
-    return sum + ((originalPrice - item.product.price) * item.quantity);
-  }, 0);
+  const discount = cartItems
+    .filter(item => !item.isGift)
+    .reduce((sum, item) => {
+      const originalPrice = item.product.originalPrice || item.product.price;
+      return sum + ((originalPrice - item.product.price) * item.quantity);
+    }, 0);
 
-  const shipping = subtotal > 100000 ? 0 : 5000;
+  const shipping = subtotal > 120000 ? 0 : 8800;
   const promoDiscount = appliedPromo?.discount || 0;
   const total = subtotal + shipping - promoDiscount;
 
@@ -199,6 +203,42 @@ useEffect(() => {
     router.push('/checkout');
   };
 
+  // Toast notification function
+  const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
+    const toast = document.createElement('div');
+    toast.className = `fixed top-[100px] right-4 z-50 px-4 py-3 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full ${
+      type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' :
+      type === 'error' ? 'bg-red-50 border border-red-200 text-red-800' :
+      'bg-yellow-50 border border-yellow-200 text-yellow-800'
+    }`;
+    
+    toast.innerHTML = `
+      <div class="flex items-center">
+        <div class="mr-3">
+          ${type === 'success' ? '✅' : type === 'error' ? '❌' : '⚠️'}
+        </div>
+        <div class="font-medium">${message}</div>
+      </div>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // Animate in
+    setTimeout(() => {
+      toast.classList.remove('translate-x-full');
+    }, 10);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+      toast.classList.add('translate-x-full');
+      setTimeout(() => {
+        if (document.body.contains(toast)) {
+          document.body.removeChild(toast);
+        }
+      }, 300);
+    }, 3000);
+  };
+
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoginLoading(true);
@@ -216,10 +256,13 @@ useEffect(() => {
       }
       
       await login(credentials);
+      showToast('амжилттай нэвтэрлээ', 'success');
       setIsLoginModalOpen(false);
       setEmail('');
       setPassword('');
-      router.push('/checkout');
+      setTimeout(() => {
+        router.push('/checkout');
+      }, 500);
     } catch (error: any) {
       setLoginError(error.message || 'Нэвтрэхэд алдаа гарлаа. Та имэйл/утас болон нууц үгээ шалгана уу.');
     } finally {
@@ -379,10 +422,19 @@ useEffect(() => {
               {cartItems.map((item) => (
                 <div 
                   key={`${item.id}-${item.selectedSize}-${item.selectedColor}`} 
-                  className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-sm transition-shadow"
+                  className={`bg-white rounded-lg border p-3 sm:p-4 hover:shadow-sm transition-shadow ${
+                    item.isGift ? 'border-purple-300 bg-purple-50' : 'border-gray-200'
+                  }`}
                 >
-                  <div className="flex gap-4">
-                    <div className="w-24 h-24 flex-shrink-0">
+                  {item.isGift && (
+                    <div className="mb-2 flex items-center gap-2 text-purple-700">
+                      <Gift className="w-4 h-4" />
+                      <span className="text-xs font-medium">Бэлэг</span>
+                    </div>
+                  )}
+                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                    {/* Product Image */}
+                    <div className="w-full sm:w-24 h-48 sm:h-24 flex-shrink-0">
                       <img
                         src={item.product.image}
                         alt={item.product.nameMn}
@@ -392,89 +444,99 @@ useEffect(() => {
                         }}
                       />
                     </div>
-                    <div className="flex-1">
-                      <div className="flex justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <h3 className="font-medium text-gray-900 hover:text-gray-700 cursor-pointer">
-                                {item.product.nameMn}
-                              </h3>
-                              <div className="flex items-center gap-3 mt-2">
-                                {item.selectedSize && (
-                                  <span className="text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded">
-                                    Хэмжээ: {item.selectedSize}
-                                  </span>
-                                )}
-                                {item.selectedColor && (
-                                  <span className="text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded">
-                                    Өнгө: {item.selectedColor}
-                                  </span>
-                                )}
-                                <span className={`text-xs px-2 py-1 rounded ${
-                                  item.product.inStock ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                                }`}>
-                                  {item.product.inStock ? 'Бэлэн' : 'Дууссан'}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-lg font-bold text-gray-900">
-                                {formatPrice(item.product.price * item.quantity)}
-                              </div>
-                              {item.product.originalPrice && item.product.originalPrice > item.product.price && (
-                                <div className="text-sm text-gray-500 line-through">
-                                  {formatPrice(item.product.originalPrice * item.quantity)}
-                                </div>
-                              )}
-                            </div>
+                    
+                    {/* Product Details */}
+                    <div className="flex-1 min-w-0">
+                      {/* Product Name and Price - Mobile: Stack, Desktop: Side by side */}
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 mb-3">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-medium text-gray-900 hover:text-gray-700 cursor-pointer text-sm sm:text-base break-words">
+                            {item.product.nameMn}
+                          </h3>
+                        </div>
+                        <div className="text-left sm:text-right flex-shrink-0">
+                          <div className="text-base sm:text-lg font-bold text-gray-900">
+                            {formatPrice(item.product.price * item.quantity)}
                           </div>
-                          
-                          <div className="mt-4 flex items-center justify-between">
-                            <div className="flex items-center gap-4">
+                          {item.product.originalPrice && item.product.originalPrice > item.product.price && (
+                            <div className="text-xs sm:text-sm text-gray-500 line-through">
+                              {formatPrice(item.product.originalPrice * item.quantity)}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Size, Color, Stock Status */}
+                      <div className="flex flex-wrap items-center gap-2 mb-3">
+                        {item.selectedSize && (
+                          <span className="text-xs sm:text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded whitespace-nowrap">
+                            Хэмжээ: {item.selectedSize}
+                          </span>
+                        )}
+                        {item.selectedColor && (
+                          <span className="text-xs sm:text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded whitespace-nowrap">
+                            Өнгө: {item.selectedColor}
+                          </span>
+                        )}
+                        <span className={`text-xs px-2 py-1 rounded whitespace-nowrap ${
+                          item.product.inStock ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {item.product.inStock ? 'Бэлэн' : 'Дууссан'}
+                        </span>
+                      </div>
+                      
+                      {/* Quantity Controls and Actions - Mobile: Stack, Desktop: Side by side */}
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+                        <div className="flex items-center gap-3 sm:gap-4">
+                          {item.isGift ? (
+                            <div className="text-sm text-purple-600 font-medium">
+                              Бэлэг (автоматаар нэмэгдсэн)
+                            </div>
+                          ) : (
+                            <>
                               <div className="flex items-center border border-gray-300 rounded-lg">
                                 <button
                                   onClick={() => updateQuantity(item.id, -1)}
-                                  className="w-8 h-8 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-50 transition-colors rounded-l"
+                                  className="w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-50 transition-colors rounded-l touch-manipulation"
                                   disabled={item.quantity <= 1}
                                 >
-                                  <Minus className="w-3 h-3" />
+                                  <Minus className="w-4 h-4 sm:w-3 sm:h-3" />
                                 </button>
-                                <span className="w-12 text-center font-medium">{item.quantity}</span>
+                                <span className="w-12 sm:w-12 text-center font-medium text-sm sm:text-base">{item.quantity}</span>
                                 <button
                                   onClick={() => updateQuantity(item.id, 1)}
-                                  className="w-8 h-8 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors rounded-r"
+                                  className="w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors rounded-r touch-manipulation"
                                 >
-                                  <Plus className="w-3 h-3" />
+                                  <Plus className="w-4 h-4 sm:w-3 sm:h-3" />
                                 </button>
                               </div>
                               
                               <div className="flex items-center gap-2">
                                 <button
                                   onClick={() => handleToggleWishlist(item)}
-                                  className={`transition-colors ${
+                                  className={`p-2 transition-colors touch-manipulation ${
                                     isInWishlist(item.product.id) 
                                       ? 'text-red-500' 
                                       : 'text-gray-400 hover:text-red-500'
                                   }`}
                                   title={isInWishlist(item.product.id) ? "Хүслийн жагсаалтаас хасах" : "Хүслийн жагсаалтад нэмэх"}
                                 >
-                                  <Heart className="w-4 h-4" />
+                                  <Heart className="w-5 h-5 sm:w-4 sm:h-4" />
                                 </button>
                                 <button
                                   onClick={() => removeItem(item.id)}
-                                  className="text-gray-400 hover:text-red-500 transition-colors ml-2"
+                                  className="p-2 text-gray-400 hover:text-red-500 transition-colors touch-manipulation"
                                   title="Устгах"
                                 >
-                                  <Trash2 className="w-4 h-4" />
+                                  <Trash2 className="w-5 h-5 sm:w-4 sm:h-4" />
                                 </button>
                               </div>
-                            </div>
-                            
-                            <div className="text-sm text-gray-500">
-                              Нэгж үнэ: {formatPrice(item.product.price)}
-                            </div>
-                          </div>
+                            </>
+                          )}
+                        </div>
+                        
+                        <div className="text-xs sm:text-sm text-gray-500">
+                          Нэгж үнэ: {formatPrice(item.product.price)}
                         </div>
                       </div>
                     </div>

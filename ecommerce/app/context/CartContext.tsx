@@ -1,7 +1,7 @@
 // app/context/CartContext.tsx
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 
 interface Product {
   id: string | number;
@@ -25,6 +25,7 @@ interface CartItem {
   selectedSize?: string;
   selectedColor?: string;
   addedAt: string;
+  isGift?: boolean; // Mark gift items
 }
 
 interface AddToCartResult {
@@ -74,6 +75,8 @@ export const CartProvider = ({ children }: CartProviderProps) => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [wishlistItems, setWishlistItems] = useState<WishlistItem[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
+  const isCheckingGiftsRef = useRef(false);
+  const lastNonGiftTotalRef = useRef<number | null>(null);
 
   // Load cart and wishlist from localStorage on mount
   useEffect(() => {
@@ -115,11 +118,213 @@ export const CartProvider = ({ children }: CartProviderProps) => {
     }
   }, [wishlistItems, isInitialized]);
 
+  // Check and auto-add gift products when cart threshold is met
+  useEffect(() => {
+    if (!isInitialized || cartItems.length === 0) {
+      lastNonGiftTotalRef.current = null;
+      return;
+    }
+
+    // Calculate totals excluding gift items (gifts shouldn't count toward threshold)
+    const nonGiftItems = cartItems.filter(item => !item.isGift);
+    const cartTotal = nonGiftItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+    
+    // Only check if non-gift total changed (prevents infinite loop)
+    if (lastNonGiftTotalRef.current === cartTotal && cartItems.some(item => item.isGift)) {
+      return; // No change in non-gift total, skip check
+    }
+    
+    // Prevent concurrent checks
+    if (isCheckingGiftsRef.current) {
+      return;
+    }
+
+    const checkAndAddGifts = async () => {
+      isCheckingGiftsRef.current = true;
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+        const itemCount = nonGiftItems.reduce((sum, item) => sum + item.quantity, 0);
+
+        // Check eligibility
+        const response = await fetch(`${API_URL}/gift-settings/check-eligibility`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            cart_total: cartTotal,
+            item_count: itemCount,
+          }),
+        });
+
+        if (!response.ok) {
+          // Try to parse JSON error response, fallback to text
+          let errorMessage = 'Unknown error';
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorData.error || JSON.stringify(errorData);
+          } catch {
+            try {
+              errorMessage = await response.text();
+            } catch {
+              errorMessage = `HTTP ${response.status}`;
+            }
+          }
+          console.error('Failed to check gift eligibility:', response.status, errorMessage);
+          // Don't throw - gracefully handle the error and continue
+          isCheckingGiftsRef.current = false;
+          return;
+        }
+
+        const result = await response.json();
+        
+        // Get current non-gift items (may have changed during async operation)
+        setCartItems(currentItems => {
+          const currentNonGiftItems = currentItems.filter(item => !item.isGift);
+          const currentNonGiftTotal = currentNonGiftItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+          
+          // If non-gift total changed during async operation, skip update
+          if (currentNonGiftTotal !== cartTotal) {
+            isCheckingGiftsRef.current = false;
+            return currentItems;
+          }
+          
+          if (result.success && result.eligible && result.gift_products && result.gift_products.length > 0) {
+            // Filter gift products that should be added (not already in cart)
+            const giftProductsToAdd = result.gift_products.filter((giftProduct: any) => {
+              // Check if gift product is already in cart (either as gift or non-gift)
+              return !currentItems.some(item => String(item.product.id) === String(giftProduct.id));
+            });
+
+            // Convert gift products to cart items
+            const newGiftItems: CartItem[] = giftProductsToAdd.map((giftProduct: any) => {
+              // Use first variation if available, otherwise use product price
+              const originalPrice = giftProduct.variations && giftProduct.variations.length > 0
+                ? parseFloat(giftProduct.variations[0].price)
+                : parseFloat(giftProduct.price);
+
+              return {
+                id: `gift-${giftProduct.id}`,
+                product: {
+                  id: giftProduct.id,
+                  name: giftProduct.name || giftProduct.nameMn || 'Бэлэг',
+                  nameMn: giftProduct.nameMn || giftProduct.name || 'Бэлэг',
+                  price: 0, // Gift items are free
+                  originalPrice: originalPrice,
+                  image: giftProduct.thumbnail || (giftProduct.images && giftProduct.images[0]) || '',
+                  thumbnail: giftProduct.thumbnail || (giftProduct.images && giftProduct.images[0]) || '',
+                  inStock: giftProduct.inStock !== false,
+                  category: giftProduct.category || '',
+                  sku: giftProduct.sku || '',
+                },
+                quantity: 1,
+                addedAt: new Date().toISOString(),
+                isGift: true,
+              };
+            });
+
+            // Get current gift items and their IDs
+            const currentGiftItems = currentItems.filter(item => item.isGift);
+            const currentGiftIds = new Set<string>(currentGiftItems.map(item => String(item.product.id)));
+            
+            // Get expected gift product IDs from API response
+            const expectedGiftIds = new Set<string>(result.gift_products.map((gp: any) => String(gp.id)));
+            
+            // Check if gift items changed (need to add new ones or remove old ones)
+            const giftsChanged = 
+              currentGiftIds.size !== expectedGiftIds.size ||
+              Array.from(currentGiftIds).some((id: string) => !expectedGiftIds.has(id)) ||
+              Array.from(expectedGiftIds).some((id: string) => !currentGiftIds.has(id));
+            
+            if (giftsChanged) {
+              // Remove old gift items that are no longer eligible
+              const updatedNonGiftItems = currentNonGiftItems;
+              
+              // Add new gift items
+              const finalGiftItems = result.gift_products.map((giftProduct: any) => {
+                // Check if already exists as gift item
+                const existingGiftItem = currentGiftItems.find(
+                  item => String(item.product.id) === String(giftProduct.id)
+                );
+                
+                if (existingGiftItem) {
+                  return existingGiftItem;
+                }
+                
+                // Create new gift item
+                const originalPrice = giftProduct.variations && giftProduct.variations.length > 0
+                  ? parseFloat(giftProduct.variations[0].price)
+                  : parseFloat(giftProduct.price);
+
+                return {
+                  id: `gift-${giftProduct.id}`,
+                  product: {
+                    id: giftProduct.id,
+                    name: giftProduct.name || giftProduct.nameMn || 'Бэлэг',
+                    nameMn: giftProduct.nameMn || giftProduct.name || 'Бэлэг',
+                    price: 0,
+                    originalPrice: originalPrice,
+                    image: giftProduct.thumbnail || (giftProduct.images && giftProduct.images[0]) || '',
+                    thumbnail: giftProduct.thumbnail || (giftProduct.images && giftProduct.images[0]) || '',
+                    inStock: giftProduct.inStock !== false,
+                    category: giftProduct.category || '',
+                    sku: giftProduct.sku || '',
+                  },
+                  quantity: 1,
+                  addedAt: new Date().toISOString(),
+                  isGift: true,
+                };
+              });
+              
+              lastNonGiftTotalRef.current = currentNonGiftTotal;
+              isCheckingGiftsRef.current = false;
+              return [...updatedNonGiftItems, ...finalGiftItems];
+            }
+            
+            isCheckingGiftsRef.current = false;
+            return currentItems;
+          } else {
+            // Not eligible - remove gift items if any
+            if (currentItems.some(item => item.isGift)) {
+              lastNonGiftTotalRef.current = currentNonGiftTotal;
+              isCheckingGiftsRef.current = false;
+              return currentNonGiftItems;
+            }
+            
+            isCheckingGiftsRef.current = false;
+            return currentItems;
+          }
+        });
+      } catch (error) {
+        console.error('Error checking gift eligibility:', error);
+        isCheckingGiftsRef.current = false;
+      }
+    };
+
+    // Debounce to avoid too many API calls
+    const timeoutId = setTimeout(checkAndAddGifts, 500);
+    return () => {
+      clearTimeout(timeoutId);
+      isCheckingGiftsRef.current = false;
+    };
+  }, [cartItems, isInitialized]);
+
   const addToCart = (item: CartItem): AddToCartResult => {
+    // Don't allow manually adding gift items
+    if (item.isGift) {
+      return {
+        success: false,
+        message: 'Бэлгийн бараа зөвхөн автоматаар нэмэгдэнэ',
+        alreadyExists: false
+      };
+    }
+
     // Check if item already exists in current cart state BEFORE updating
     // Compare by product ID and variation attributes, not cart item ID
     // since different pages may create different cart item IDs for the same product
+    // Also exclude gift items from this check
     const existingItem = cartItems.find(cartItem => 
+      !cartItem.isGift &&
       String(cartItem.product.id) === String(item.product.id) && 
       cartItem.selectedSize === item.selectedSize &&
       cartItem.selectedColor === item.selectedColor
@@ -224,8 +429,10 @@ export const CartProvider = ({ children }: CartProviderProps) => {
   // Calculate wishlist count
   const wishlistCount = wishlistItems.length;
   
-  // Calculate cart total
-  const cartTotal = cartItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+  // Calculate cart total (excluding gift items - they are free)
+  const cartTotal = cartItems
+    .filter(item => !item.isGift)
+    .reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
 
   return (
     <CartContext.Provider

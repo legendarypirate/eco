@@ -102,6 +102,8 @@ exports.create = async (req, res) => {
       isOnSale: req.body.isOnSale || false,
       isBestSeller: req.body.isBestSeller || false,
       isLimited: req.body.isLimited || false,
+      isGift: req.body.isGift || req.body.is_gift || false,
+      giftFloorLimit: req.body.giftFloorLimit !== undefined ? req.body.giftFloorLimit : (req.body.gift_floor_limit !== undefined ? req.body.gift_floor_limit : null),
       discount: req.body.discount || 0,
       discountAmount: req.body.discountAmount,
       salePrice: req.body.salePrice || req.body.price,
@@ -962,7 +964,7 @@ exports.update = async (req, res) => {
     const fields = ['name', 'nameMn', 'price', 'originalPrice', 'thumbnail', 'categoryId',
                     'category', 'subcategory', 'inStock', 'stockQuantity', 'sku', 'brand',
                     'description', 'descriptionMn', 'specifications', 'isFeatured', 'isNew', 'isOnSale',
-                    'isBestSeller', 'isLimited', 'discount', 'discountAmount', 'salePrice',
+                    'isBestSeller', 'isLimited', 'isGift', 'giftFloorLimit', 'gift_floor_limit', 'discount', 'discountAmount', 'salePrice',
                     'saleEndDate', 'sales', 'rating', 'reviewCount', 'slug', 'metaTitle',
                     'metaDescription', 'tags', 'weight', 'dimensions', 'publishedAt',
                     'images']; // Added images to fields array
@@ -972,6 +974,15 @@ exports.update = async (req, res) => {
         updateData[field] = req.body[field];
       }
     });
+
+    // Handle gift_floor_limit mapping (API uses snake_case, model uses camelCase)
+    if (req.body.gift_floor_limit !== undefined) {
+      updateData.giftFloorLimit = req.body.gift_floor_limit;
+    }
+    // Also handle is_gift mapping
+    if (req.body.is_gift !== undefined) {
+      updateData.isGift = req.body.is_gift;
+    }
 
     // Update thumbnail if images exist
     if (req.body.images && Array.isArray(req.body.images) && req.body.images.length > 0) {

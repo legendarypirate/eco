@@ -6,15 +6,21 @@ module.exports = (sequelize, Sequelize) => {
             autoIncrement: true
         },
         code: {
-            type: Sequelize.STRING(6),
+            type: Sequelize.STRING(50),
             allowNull: false,
             unique: true,
             validate: {
-                is: {
-                    args: /^[A-Z]{6}$/,
-                    msg: "Coupon code must be exactly 6 uppercase letters"
+                len: {
+                    args: [1, 50],
+                    msg: "Coupon code must be between 1 and 50 characters"
                 }
             }
+        },
+        is_manual: {
+            type: Sequelize.BOOLEAN,
+            allowNull: false,
+            defaultValue: false,
+            comment: "If true, coupon was manually created and can be used by many users (one per user). If false, randomly generated and can only be used once."
         },
         discount_percentage: {
             type: Sequelize.DECIMAL(5, 2),

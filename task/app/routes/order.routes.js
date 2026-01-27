@@ -10,6 +10,9 @@ module.exports = app => {
   // Retrieve all Orders by user ID (requires authentication)
   router.get("/", auth.verifyToken, orders.findAllByUserId);
 
+  // Get last delivered order (requires authentication)
+  router.get("/last-delivered", auth.verifyToken, orders.getLastDeliveredOrder);
+
   // Retrieve a single Order with id
   router.get("/:id", orders.findOne);
 

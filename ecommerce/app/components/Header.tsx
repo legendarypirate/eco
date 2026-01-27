@@ -212,6 +212,42 @@ const Header = () => {
     }
   };
 
+  // Toast notification function
+  const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
+    const toast = document.createElement('div');
+    toast.className = `fixed top-[100px] right-4 z-50 px-4 py-3 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full ${
+      type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' :
+      type === 'error' ? 'bg-red-50 border border-red-200 text-red-800' :
+      'bg-yellow-50 border border-yellow-200 text-yellow-800'
+    }`;
+    
+    toast.innerHTML = `
+      <div class="flex items-center">
+        <div class="mr-3">
+          ${type === 'success' ? '✅' : type === 'error' ? '❌' : '⚠️'}
+        </div>
+        <div class="font-medium">${message}</div>
+      </div>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // Animate in
+    setTimeout(() => {
+      toast.classList.remove('translate-x-full');
+    }, 10);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+      toast.classList.add('translate-x-full');
+      setTimeout(() => {
+        if (document.body.contains(toast)) {
+          document.body.removeChild(toast);
+        }
+      }, 300);
+    }, 3000);
+  };
+
   // Handle login
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -232,6 +268,7 @@ const Header = () => {
       }
       
       await login(credentials);
+      showToast('амжилттай нэвтэрлээ', 'success');
       setIsLoginOpen(false);
       setEmail('');
       setPassword('');
@@ -251,6 +288,7 @@ const Header = () => {
       const result = await loginWithGoogle();
       
       if (result.success) {
+        showToast('амжилттай нэвтэрлээ', 'success');
         setIsLoginOpen(false);
       } else {
         setLoginError('Google нэвтрэхэд алдаа гарлаа');
@@ -468,10 +506,10 @@ const Header = () => {
                   )}
                 </div>
 
-                {/* Cart */}
+                {/* Cart - Hidden on larger screens, shown on mobile */}
                 <button 
                   onClick={() => router.push('/cart')}
-                  className="relative text-gray-600 hover:text-gray-900 transition-colors"
+                  className="relative text-gray-600 hover:text-gray-900 transition-colors lg:hidden"
                 >
                   <ShoppingCart className="w-5 h-5" />
                   {cartCount > 0 && (
@@ -633,6 +671,22 @@ const Header = () => {
           }
         `}</style>
       </header>
+
+      {/* Fixed Floating Cart Button - Right side, vertically centered */}
+      <button
+        onClick={() => router.push('/cart')}
+        className="fixed right-6 top-1/2 -translate-y-1/2 z-40 bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-full p-4 shadow-2xl hover:shadow-blue-500/50 transition-all duration-300 hover:scale-110 active:scale-95 hidden lg:flex items-center justify-center group"
+        aria-label="Cart"
+      >
+        <div className="relative">
+          <ShoppingCart className="w-8 h-8" />
+          {cartCount > 0 && (
+            <span className="absolute -top-2 -right-2 min-w-[24px] h-6 bg-red-500 rounded-full text-xs text-white flex items-center justify-center px-1.5 font-bold shadow-lg animate-bounce">
+              {cartCount > 99 ? '99+' : cartCount}
+            </span>
+          )}
+        </div>
+      </button>
 
       {/* Login Modal */}
       {isLoginOpen && (

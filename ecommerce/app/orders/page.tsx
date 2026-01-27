@@ -8,7 +8,9 @@ import {
   Truck,
   XCircle,
   Eye,
-  ArrowLeft
+  ArrowLeft,
+  RotateCcw,
+  FileText
 } from 'lucide-react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -258,13 +260,35 @@ const OrdersPage = () => {
                       <div className="text-lg font-bold text-gray-900 mb-1">
                         {formatPrice(Number(order.grand_total))}
                       </div>
-                      <Link
-                        href={`/order/${order.id}`}
-                        className="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-1 justify-end"
-                      >
-                        <Eye className="w-3 h-3" />
-                        Дэлгэрэнгүй
-                      </Link>
+                      <div className="flex items-center gap-3 justify-end">
+                        {order.order_status === 2 && (
+                          <>
+                            <Link
+                              href={`/reorder/${order.id}`}
+                              className="text-sm bg-gray-900 text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 flex items-center gap-1 transition-colors"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                              Дахин захиалах
+                            </Link>
+                            <a
+                              href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/order/${order.id}/invoice/pdf`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 flex items-center gap-1 transition-colors"
+                            >
+                              <FileText className="w-3 h-3" />
+                              Нэхэмжлэх авах
+                            </a>
+                          </>
+                        )}
+                        <Link
+                          href={`/order/${order.id}`}
+                          className="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-1"
+                        >
+                          <Eye className="w-3 h-3" />
+                          Дэлгэрэнгүй
+                        </Link>
+                      </div>
                     </div>
                   </div>
 

@@ -377,6 +377,53 @@ exports.findAllByUserId = (req, res) => {
     });
 };
 
+// Get last delivered order for a user
+exports.getLastDeliveredOrder = (req, res) => {
+  const userId = req.user?.id;
+  
+  if (!userId) {
+    res.status(401).json({
+      success: false,
+      message: "Нэвтрэх шаардлагатай!"
+    });
+    return;
+  }
+
+  Order.findOne({
+    where: { 
+      user_id: userId,
+      order_status: 2 // 2 = Delivered
+    },
+    include: [{ model: OrderItem, as: "items" }],
+    order: [["created_at", "DESC"]],
+    attributes: {
+      exclude: ['qr_image'] // Exclude large qr_image from response to save memory
+    }
+  })
+    .then(data => {
+      if (data) {
+        const cleanedData = cleanOrderData(data);
+        res.json({
+          success: true,
+          order: cleanedData
+        });
+      } else {
+        res.json({
+          success: true,
+          order: null,
+          message: "Хүргэгдсэн захиалга олдсонгүй"
+        });
+      }
+    })
+    .catch(err => {
+      console.error("Find last delivered order error:", err);
+      res.status(500).json({
+        success: false,
+        message: err.message || "Захиалгыг авахад алдаа гарлаа."
+      });
+    });
+};
+
 // Find a single Order with an id
 exports.findOne = async (req, res) => {
   const id = req.params.id;
@@ -538,10 +585,18 @@ exports.updateStatus = (req, res) => {
         return null;
       }
 
-      return order.update({
+      // Prepare update data
+      const updateData = {
         order_status: req.body.order_status,
         updated_at: new Date()
-      });
+      };
+
+      // If status is changing to processing (0) and it wasn't processing before, set processing_started_at
+      if (req.body.order_status === 0 && order.order_status !== 0 && !order.processing_started_at) {
+        updateData.processing_started_at = new Date();
+      }
+
+      return order.update(updateData);
     })
     .then(updatedOrder => {
       if (updatedOrder) {

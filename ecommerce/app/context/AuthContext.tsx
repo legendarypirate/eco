@@ -185,8 +185,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         localStorage.setItem('token', response.token);
         localStorage.setItem('user', JSON.stringify(userData));
         
-        if (response.data?.refresh_token) {
-          localStorage.setItem('refresh_token', response.data.refresh_token);
+        // Handle refresh_token from response or data
+        const refreshToken = (response as any).refresh_token || response.data?.refresh_token;
+        if (refreshToken) {
+          localStorage.setItem('refresh_token', refreshToken);
         }
         
         setUser(userData);
@@ -212,8 +214,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         localStorage.setItem('token', response.token);
         localStorage.setItem('user', JSON.stringify(userData));
         
-        if (response.data?.refresh_token) {
-          localStorage.setItem('refresh_token', response.data.refresh_token);
+        // Handle refresh_token from response or data
+        const refreshToken = (response as any).refresh_token || response.data?.refresh_token;
+        if (refreshToken) {
+          localStorage.setItem('refresh_token', refreshToken);
         }
         
         setUser(userData);

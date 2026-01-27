@@ -89,6 +89,11 @@ module.exports = (sequelize, Sequelize) => {
             allowNull: true,
             comment: "JSON string containing invoice-specific data (name, register, email, phone)"
         },
+        processing_started_at: {
+            type: Sequelize.DATE,
+            allowNull: true,
+            comment: "Timestamp when order status changed to processing (боловсруулж байна)"
+        },
         created_at: {
             type: Sequelize.DATE,
             defaultValue: Sequelize.NOW

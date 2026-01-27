@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import ProtectedRoute from '../components/ProtectedRoute';
@@ -18,6 +18,7 @@ import { apiService } from '../services/api';
 
 const CheckoutPage = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { cartItems, clearCart } = useCart();
   
@@ -66,6 +67,80 @@ const CheckoutPage = () => {
     document.title = 'Төлбөр төлөх | TSAAS';
   }, []);
 
+  // Handle re-order redirect with orderId and invoiceId (optional - for future use)
+  // Note: Currently re-order handles payment directly, but keeping this for potential redirects
+  useEffect(() => {
+    const orderIdParam = searchParams?.get('orderId');
+    const invoiceIdParam = searchParams?.get('invoiceId');
+    
+    // Only process if both params exist and user is authenticated
+    if (orderIdParam && invoiceIdParam && isAuthenticated && !authLoading && cartItems.length === 0) {
+      // This is a re-order redirect - load invoice and show payment
+      const loadReOrderInvoice = async () => {
+        try {
+          setIsProcessing(true);
+          setCurrentOrderId(orderIdParam);
+          setInvoiceId(invoiceIdParam);
+          
+          // Fetch invoice details
+          const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+          const response = await fetch(`${API_URL}/qpay/order/${invoiceIdParam}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(isAuthenticated && { 'Authorization': `Bearer ${localStorage.getItem('token')}` }),
+            },
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            if (result.success && result.order) {
+              const orderData = result.order;
+              
+              if (orderData.order_number) {
+                setOrderNumber(orderData.order_number);
+              }
+              
+              // Set QR code and payment URLs
+              const qrTextValue = orderData.qrText || '';
+              setQrText(qrTextValue);
+              
+              const qrImageValue = orderData.qrImage;
+              if (qrImageValue) {
+                if (qrImageValue.startsWith('http://') || qrImageValue.startsWith('https://')) {
+                  setQrCode(qrImageValue);
+                } else if (qrImageValue.startsWith('data:') && qrImageValue.length < 100000) {
+                  setQrCode(qrImageValue);
+                } else if (!qrImageValue.startsWith('data:') && qrImageValue.length < 100000) {
+                  setQrCode(`data:image/png;base64,${qrImageValue}`);
+                } else if (qrTextValue) {
+                  setQrCode(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrTextValue)}`);
+                }
+              } else if (qrTextValue) {
+                setQrCode(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrTextValue)}`);
+              }
+              
+              // Set payment URLs if available
+              if (orderData.urls && Array.isArray(orderData.urls)) {
+                setPaymentUrls(orderData.urls);
+              }
+              
+              // Go to payment step
+              setStep(2);
+              setIsProcessing(false);
+              startPaymentCheck(invoiceIdParam);
+            }
+          }
+        } catch (error) {
+          console.error('Failed to load re-order invoice:', error);
+          setIsProcessing(false);
+        }
+      };
+      
+      loadReOrderInvoice();
+    }
+  }, [searchParams, isAuthenticated, authLoading, cartItems.length]);
+
   // Pre-fill user data if authenticated
   useEffect(() => {
     if (user && isAuthenticated && !hasPrefilledRef.current) {
@@ -112,9 +187,11 @@ const CheckoutPage = () => {
     }
   }, []);
 
-  // Calculate totals
+  // Calculate totals (excluding gift items - they are free)
   const { subtotal, shipping, couponDiscount, total } = useMemo(() => {
-    const subtotal = cartItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+    const subtotal = cartItems
+      .filter(item => !item.isGift)
+      .reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
     
     let shipping = 0;
     if (formData.deliveryMethod === 'pickup' || formData.deliveryMethod === 'invoice') {
@@ -122,7 +199,7 @@ const CheckoutPage = () => {
       shipping = 0;
     } else {
       // Хүргэлтээр: 5000 (or 0 if subtotal > 120000)
-      shipping = subtotal > 120000 ? 0 : 5000;
+      shipping = subtotal > 120000 ? 0 : 8800;
     }
     
     const couponDiscount = appliedCoupon?.discount || 0;
@@ -148,8 +225,18 @@ const CheckoutPage = () => {
   }, []);
 
   // Handle delivery method change immediately
-  const handleDeliveryMethodChange = useCallback((deliveryMethod: string) => {
-    setFormData(prev => ({ ...prev, deliveryMethod }));
+  const handleDeliveryMethodChange = useCallback((deliveryMethod: string, addressFields?: { city?: string; district?: string; khoroo?: string; address?: string }) => {
+    setFormData(prev => ({
+      ...prev,
+      deliveryMethod,
+      // Preserve address fields if provided
+      ...(addressFields && {
+        city: addressFields.city !== undefined ? addressFields.city : prev.city,
+        district: addressFields.district !== undefined ? addressFields.district : prev.district,
+        khoroo: addressFields.khoroo !== undefined ? addressFields.khoroo : prev.khoroo,
+        address: addressFields.address !== undefined ? addressFields.address : prev.address,
+      }),
+    }));
   }, []);
 
   const handleInvoiceInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -230,7 +317,7 @@ const CheckoutPage = () => {
   }, [formData]);
 
   const validateInvoiceForm = useCallback(() => {
-    if (!invoiceFormData.name || !invoiceFormData.register || !invoiceFormData.email || !invoiceFormData.phone) {
+    if (!invoiceFormData.name || !invoiceFormData.email || !invoiceFormData.phone) {
       alert('Бүх талбарыг бөглөнө үү.');
       return false;
     }
@@ -334,6 +421,12 @@ const CheckoutPage = () => {
       if (appliedCoupon) {
         localStorage.removeItem('appliedCoupon');
         setAppliedCoupon(null);
+      }
+
+      // If bank transfer, skip QPay invoice creation
+      if (paymentMethod === 'bank') {
+        setIsProcessing(false);
+        return;
       }
 
       // Calculate QPay invoice amount based on delivery method

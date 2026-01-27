@@ -7,6 +7,7 @@ import Hero from './components/Hero';
 import FeaturedProducts from './components/FeaturedProducts';
 import Footer from './components/Footer';
 import DemandedProducts from './components/DemandedProducts';
+import Partners from './components/Partners';
 
 export default function Home() {
   useEffect(() => {
@@ -19,6 +20,7 @@ export default function Home() {
       <Hero />
       <FeaturedProducts />
       <DemandedProducts />
+      <Partners />
       <Footer />
     </div>
   );

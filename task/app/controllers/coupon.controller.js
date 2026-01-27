@@ -36,23 +36,62 @@ const generateCouponCode = async () => {
 // Get all coupons (admin)
 exports.getAll = async (req, res) => {
   try {
+    const { page = 1, limit = 50, search = '', status = 'all' } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const maxLimit = Math.min(parseInt(limit), 100); // Cap at 100 to prevent memory issues
+
+    // Build where clause
+    const whereClause = {};
+
+    // Search by code
+    if (search && search.trim()) {
+      whereClause.code = {
+        [Op.iLike]: `%${search.trim()}%`
+      };
+    }
+
+    // Filter by status
+    const now = new Date();
+    if (status === 'active') {
+      whereClause.is_active = true;
+      whereClause.expires_at = {
+        [Op.gt]: now
+      };
+    } else if (status === 'inactive') {
+      whereClause.is_active = false;
+    } else if (status === 'expired') {
+      whereClause.expires_at = {
+        [Op.lt]: now
+      };
+    }
+
+    // Get total count
+    const totalCount = await Coupon.count({ where: whereClause });
+
+    // Get coupons with pagination
     const coupons = await Coupon.findAll({
-      order: [['created_at', 'DESC']]
+      where: whereClause,
+      order: [['created_at', 'DESC']],
+      limit: maxLimit,
+      offset: offset
     });
 
     // Get usage counts for all coupons
     const couponIds = coupons.map(c => c.id);
-    const usageCounts = await CouponUsage.findAll({
-      where: { coupon_id: { [Op.in]: couponIds } },
-      attributes: ['coupon_id', [db.sequelize.fn('COUNT', db.sequelize.col('id')), 'count']],
-      group: ['coupon_id'],
-      raw: true
-    });
+    let usageMap = {};
+    
+    if (couponIds.length > 0) {
+      const usageCounts = await CouponUsage.findAll({
+        where: { coupon_id: { [Op.in]: couponIds } },
+        attributes: ['coupon_id', [db.sequelize.fn('COUNT', db.sequelize.col('id')), 'count']],
+        group: ['coupon_id'],
+        raw: true
+      });
 
-    const usageMap = {};
-    usageCounts.forEach(item => {
-      usageMap[item.coupon_id] = parseInt(item.count) || 0;
-    });
+      usageCounts.forEach(item => {
+        usageMap[item.coupon_id] = parseInt(item.count) || 0;
+      });
+    }
 
     // Add usage count to each coupon
     const couponsWithStats = coupons.map(coupon => {
@@ -65,7 +104,13 @@ exports.getAll = async (req, res) => {
 
     res.json({
       success: true,
-      data: couponsWithStats
+      data: couponsWithStats,
+      pagination: {
+        total: totalCount,
+        page: parseInt(page),
+        limit: maxLimit,
+        totalPages: Math.ceil(totalCount / maxLimit)
+      }
     });
   } catch (error) {
     console.error('Get all coupons error:', error);
@@ -113,10 +158,10 @@ exports.getById = async (req, res) => {
   }
 };
 
-// Create new coupon (admin)
+// Create new coupon(s) (admin)
 exports.create = async (req, res) => {
   try {
-    const { discount_percentage, expires_at, is_active } = req.body;
+    const { discount_percentage, expires_at, is_active, code, count } = req.body;
 
     // Validate required fields
     if (!discount_percentage || discount_percentage <= 0 || discount_percentage > 100) {
@@ -142,21 +187,85 @@ exports.create = async (req, res) => {
       });
     }
 
-    // Generate unique coupon code
-    const code = await generateCouponCode();
+    const isManual = !!code; // If code is provided, it's manual
+    const couponCount = count && count > 1 ? parseInt(count) : 1;
 
-    const coupon = await Coupon.create({
-      code,
-      discount_percentage: parseFloat(discount_percentage),
-      expires_at: expirationDate,
-      is_active: is_active !== undefined ? is_active : true
-    });
+    // If manual code provided, validate it
+    if (isManual) {
+      const normalizedCode = code.toUpperCase().trim();
+      if (normalizedCode.length < 1 || normalizedCode.length > 50) {
+        return res.status(400).json({
+          success: false,
+          error: 'Coupon code must be between 1 and 50 characters'
+        });
+      }
 
-    res.status(201).json({
-      success: true,
-      data: coupon,
-      message: 'Coupon created successfully'
-    });
+      // Check if code already exists
+      const existing = await Coupon.findOne({ where: { code: normalizedCode } });
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          error: 'Coupon code already exists'
+        });
+      }
+
+      // Create single manual coupon
+      const coupon = await Coupon.create({
+        code: normalizedCode,
+        discount_percentage: parseFloat(discount_percentage),
+        expires_at: expirationDate,
+        is_active: is_active !== undefined ? is_active : true,
+        is_manual: true
+      });
+
+      return res.status(201).json({
+        success: true,
+        data: coupon,
+        message: 'Coupon created successfully'
+      });
+    } else {
+      // Generate multiple random coupons
+      if (couponCount > 100) {
+        return res.status(400).json({
+          success: false,
+          error: 'Cannot generate more than 100 coupons at once'
+        });
+      }
+
+      const coupons = [];
+      const errors = [];
+
+      for (let i = 0; i < couponCount; i++) {
+        try {
+          const generatedCode = await generateCouponCode();
+          const coupon = await Coupon.create({
+            code: generatedCode,
+            discount_percentage: parseFloat(discount_percentage),
+            expires_at: expirationDate,
+            is_active: is_active !== undefined ? is_active : true,
+            is_manual: false
+          });
+          coupons.push(coupon);
+        } catch (err) {
+          errors.push(`Failed to generate coupon ${i + 1}: ${err.message}`);
+        }
+      }
+
+      if (coupons.length === 0) {
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to generate any coupons',
+          errors: errors
+        });
+      }
+
+      return res.status(201).json({
+        success: true,
+        data: coupons,
+        message: `Successfully created ${coupons.length} coupon(s)`,
+        errors: errors.length > 0 ? errors : undefined
+      });
+    }
   } catch (error) {
     console.error('Create coupon error:', error);
     res.status(500).json({
@@ -314,20 +423,38 @@ exports.validate = async (req, res) => {
       });
     }
 
-    // Check if user has already used this coupon
-    if (user_id) {
+    // Check coupon usage based on type
+    if (coupon.is_manual) {
+      // Manual coupons: can be used by many users, but one per user
+      if (user_id) {
+        const existingUsage = await CouponUsage.findOne({
+          where: {
+            coupon_id: coupon.id,
+            user_id: user_id
+          }
+        });
+
+        if (existingUsage) {
+          return res.status(400).json({
+            success: false,
+            error: 'Та энэ урамшууллын кодыг аль хэдийн ашигласан байна',
+            message: 'Та энэ урамшууллын кодыг аль хэдийн ашигласан байна'
+          });
+        }
+      }
+    } else {
+      // Random coupons: can only be used once total
       const existingUsage = await CouponUsage.findOne({
         where: {
-          coupon_id: coupon.id,
-          user_id: user_id
+          coupon_id: coupon.id
         }
       });
 
       if (existingUsage) {
         return res.status(400).json({
           success: false,
-          error: 'Та энэ урамшууллын кодыг аль хэдийн ашигласан байна',
-          message: 'Та энэ урамшууллын кодыг аль хэдийн ашигласан байна'
+          error: 'Энэ урамшууллын кодыг аль хэдийн ашигласан байна',
+          message: 'Энэ урамшууллын кодыг аль хэдийн ашигласан байна'
         });
       }
     }
@@ -359,6 +486,38 @@ exports.validate = async (req, res) => {
 // Record coupon usage (called when order is created)
 exports.recordUsage = async (couponId, userId, orderId, discountAmount) => {
   try {
+    // Check if coupon can still be used
+    const coupon = await Coupon.findByPk(couponId);
+    if (!coupon) {
+      console.error(`Coupon ${couponId} not found`);
+      return false;
+    }
+
+    if (!coupon.is_manual) {
+      // Random coupon: check if already used
+      const existingUsage = await CouponUsage.findOne({
+        where: { coupon_id: couponId }
+      });
+      if (existingUsage) {
+        console.error(`Random coupon ${couponId} already used`);
+        return false;
+      }
+    } else {
+      // Manual coupon: check if user already used it
+      if (userId) {
+        const existingUsage = await CouponUsage.findOne({
+          where: {
+            coupon_id: couponId,
+            user_id: userId
+          }
+        });
+        if (existingUsage) {
+          console.error(`User ${userId} already used manual coupon ${couponId}`);
+          return false;
+        }
+      }
+    }
+
     await CouponUsage.create({
       coupon_id: couponId,
       user_id: userId,
@@ -370,6 +529,36 @@ exports.recordUsage = async (couponId, userId, orderId, discountAmount) => {
   } catch (error) {
     console.error('Record coupon usage error:', error);
     return false;
+  }
+};
+
+// Get coupon statistics for dashboard
+exports.getStatistics = async (req, res) => {
+  try {
+    const totalCoupons = await Coupon.count();
+    const usedCoupons = await CouponUsage.findAll({
+      attributes: ['coupon_id'],
+      group: ['coupon_id'],
+      raw: true
+    });
+    const usedCouponCount = usedCoupons.length;
+    const usageRate = totalCoupons > 0 ? (usedCouponCount / totalCoupons) * 100 : 0;
+
+    res.json({
+      success: true,
+      data: {
+        total_coupons: totalCoupons,
+        used_coupons: usedCouponCount,
+        usage_rate: parseFloat(usageRate.toFixed(2))
+      }
+    });
+  } catch (error) {
+    console.error('Get coupon statistics error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get coupon statistics',
+      message: error.message
+    });
   }
 };
 

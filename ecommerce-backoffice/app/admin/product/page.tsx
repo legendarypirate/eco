@@ -231,6 +231,7 @@ type Product = {
   isOnSale: boolean;
   isBestSeller: boolean;
   isLimited: boolean;
+  isGift: boolean;
   discount: number;
   discountAmount?: number;
   salePrice?: number;
@@ -970,7 +971,10 @@ function ProductEditForm({ product, onCancel, onSave, isCreating = false, catego
                 min="0"
                 max="100"
                 disabled={uploading}
+                readOnly
+                className="bg-gray-50"
               />
+              <p className="text-xs text-gray-500 mt-1">Анхны үнэ болон үнээс автоматаар тооцоолно</p>
             </div>
           </div>
 
@@ -1011,6 +1015,20 @@ function ProductEditForm({ product, onCancel, onSave, isCreating = false, catego
                 disabled={uploading}
               />
             </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="isGift"
+              checked={form.isGift || false}
+              onChange={(e) => updateField('isGift', e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              disabled={uploading}
+            />
+            <label htmlFor="isGift" className="text-sm font-medium">
+              Бэлэг бараа
+            </label>
           </div>
         </TabsContent>
 
@@ -1796,6 +1814,7 @@ export default function AdminProductList() {
       isOnSale: false,
       isBestSeller: false,
       isLimited: false,
+      isGift: false,
       discount: 0,
       sales: 0,
       rating: 0,

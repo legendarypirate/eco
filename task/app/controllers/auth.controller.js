@@ -108,11 +108,20 @@ exports.register = async (req, res) => {
     });
 
     const token = generateToken(user);
+    const refreshToken = generateRefreshToken(user);
     const userResponse = prepareUserResponse(user);
+    
+    // Save refresh token
+    await user.update({ refresh_token: refreshToken }, {
+      fields: ['refresh_token'],
+      returning: false
+    });
 
     res.status(201).json({ 
+      success: true,
       message: "Бүртгэл амжилттай", 
       token,
+      refresh_token: refreshToken,
       user: userResponse 
     });
   } catch (err) {
@@ -204,6 +213,7 @@ exports.login = async (req, res) => {
     console.log('Login successful for user:', user.id);
     
     res.json({
+      success: true,
       message: "Амжилттай нэвтэрлээ",
       token,
       refresh_token: refreshToken,

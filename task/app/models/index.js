@@ -41,6 +41,11 @@ db.bank_accounts = require("./bank_account.model.js")(sequelize, Sequelize);
 db.footers = require("./footer.model.js")(sequelize, Sequelize);
 db.coupons = require("./coupon.model.js")(sequelize, Sequelize);
 db.coupon_usage = require("./coupon_usage.model.js")(sequelize, Sequelize);
+db.banners = require("./banner.model.js")(sequelize, Sequelize);
+db.complaints = require("./complaint.model.js")(sequelize, Sequelize);
+db.call_sales_activities = require("./call_sales_activity.model.js")(sequelize, Sequelize);
+db.gift_settings = require("./gift_setting.model.js")(sequelize, Sequelize);
+db.partners = require("./partner.model.js")(sequelize, Sequelize);
 
 // ====== FIXED: Register junction tables WITHOUT foreign keys first ======
 
@@ -193,6 +198,38 @@ db.coupon_usage.belongsTo(db.orders, {
   constraints: false
 });
 
+// Call Sales Activity relationships
+db.call_sales_activities.belongsTo(db.users, {
+  foreignKey: "sales_manager_id",
+  as: "sales_manager",
+  constraints: false
+});
+db.call_sales_activities.belongsTo(db.users, {
+  foreignKey: "customer_id",
+  as: "customer",
+  constraints: false
+});
+db.call_sales_activities.belongsTo(db.orders, {
+  foreignKey: "order_id",
+  as: "order",
+  constraints: false
+});
+db.users.hasMany(db.call_sales_activities, {
+  foreignKey: "sales_manager_id",
+  as: "call_sales_activities",
+  constraints: false
+});
+db.users.hasMany(db.call_sales_activities, {
+  foreignKey: "customer_id",
+  as: "customer_calls",
+  constraints: false
+});
+db.orders.hasMany(db.call_sales_activities, {
+  foreignKey: "order_id",
+  as: "call_sales_activities",
+  constraints: false
+});
+
 // Call associate functions if they exist (for models that define their own associations)
 Object.keys(db).forEach(modelName => {
   if (db[modelName] && typeof db[modelName].associate === 'function') {
@@ -241,7 +278,7 @@ db.syncDatabase = async function(options = {}) {
     const otherModels = [
       'product_variations', 'tasks', 'orders', 'order_items',
       'color_options', 'reviews', 'cart_items', 'addresses',
-      'productFavorites', 'productCategories', 'product_info_images', 'footers'
+      'productFavorites', 'productCategories', 'product_info_images', 'footers', 'complaints', 'call_sales_activities'
     ];
     
     for (const modelName of otherModels) {
@@ -584,6 +621,233 @@ db.fixSupervisorIdColumn = async function() {
   } catch (error) {
     console.error('❌ Error fixing supervisor_id column:', error.message);
     throw error;
+  }
+};
+
+// ====== FIX CALL_SALES_ACTIVITIES ORDER_ID COLUMN TYPE ======
+db.fixCallSalesActivityOrderIdColumn = async function() {
+  try {
+    console.log('🔧 Checking call_sales_activities.order_id column type...');
+    
+    // Check if order_id column exists and its type
+    const [columns] = await this.sequelize.query(`
+      SELECT column_name, data_type, is_nullable
+      FROM information_schema.columns 
+      WHERE table_name = 'call_sales_activities' 
+      AND column_name = 'order_id'
+    `);
+    
+    if (columns.length === 0) {
+      console.log('ℹ️ order_id column does not exist, will be created by sync');
+      return;
+    }
+    
+    const column = columns[0];
+    
+    if (column.data_type === 'integer' || column.data_type === 'bigint') {
+      console.log('✅ order_id column is already INTEGER type');
+      return;
+    }
+    
+    console.log(`⚠️ order_id is ${column.data_type}, converting to INTEGER...`);
+    
+    // Step 1: Drop any foreign key constraints on order_id
+    try {
+      const [constraints] = await this.sequelize.query(`
+        SELECT constraint_name
+        FROM information_schema.table_constraints
+        WHERE table_name = 'call_sales_activities'
+        AND constraint_type = 'FOREIGN KEY'
+        AND constraint_name LIKE '%order_id%'
+      `);
+      
+      for (const constraint of constraints) {
+        await this.sequelize.query(`
+          ALTER TABLE call_sales_activities DROP CONSTRAINT IF EXISTS ${constraint.constraint_name}
+        `);
+        console.log(`✅ Dropped constraint: ${constraint.constraint_name}`);
+      }
+    } catch (error) {
+      console.log(`ℹ️ No foreign key constraints to drop: ${error.message}`);
+    }
+    
+    // Step 2: Check for existing data and handle it
+    const [rowCount] = await this.sequelize.query(`
+      SELECT COUNT(*)::int as count FROM call_sales_activities WHERE order_id IS NOT NULL
+    `);
+    
+    const hasData = parseInt(rowCount[0]?.count || 0) > 0;
+    
+    if (hasData && column.data_type === 'uuid') {
+      console.log('⚠️ order_id has existing UUID data, setting to NULL (cannot convert UUID to INTEGER)...');
+      // Set all UUID values to NULL since we can't convert UUIDs to integers
+      await this.sequelize.query(`
+        UPDATE call_sales_activities 
+        SET order_id = NULL 
+        WHERE order_id IS NOT NULL
+      `);
+    }
+    
+    // Step 3: Convert column type to INTEGER
+    try {
+      if (column.data_type === 'uuid') {
+        // Drop and recreate for UUID -> INTEGER conversion
+        await this.sequelize.query(`
+          ALTER TABLE call_sales_activities 
+          DROP COLUMN order_id
+        `);
+        
+        await this.sequelize.query(`
+          ALTER TABLE call_sales_activities 
+          ADD COLUMN order_id INTEGER
+        `);
+        console.log('✅ Converted order_id to INTEGER type');
+      } else if (column.data_type === 'character varying' || column.data_type === 'varchar' || column.data_type === 'text') {
+        // Try to convert string numbers to integer
+        await this.sequelize.query(`
+          ALTER TABLE call_sales_activities 
+          ALTER COLUMN order_id TYPE INTEGER 
+          USING CASE 
+            WHEN order_id ~ '^[0-9]+$' 
+            THEN order_id::integer 
+            ELSE NULL 
+          END
+        `);
+        console.log('✅ Converted order_id to INTEGER type');
+      } else {
+        // For other types, drop and recreate
+        await this.sequelize.query(`
+          ALTER TABLE call_sales_activities 
+          DROP COLUMN order_id
+        `);
+        
+        await this.sequelize.query(`
+          ALTER TABLE call_sales_activities 
+          ADD COLUMN order_id INTEGER
+        `);
+        console.log('✅ Recreated order_id as INTEGER type');
+      }
+    } catch (error) {
+      // If conversion fails, drop and recreate
+      console.log(`⚠️ Direct conversion failed (${error.message}), dropping and recreating column...`);
+      try {
+        await this.sequelize.query(`
+          ALTER TABLE call_sales_activities 
+          DROP COLUMN IF EXISTS order_id
+        `);
+        
+        await this.sequelize.query(`
+          ALTER TABLE call_sales_activities 
+          ADD COLUMN order_id INTEGER
+        `);
+        console.log('✅ Recreated order_id as INTEGER type');
+      } catch (recreateError) {
+        console.error('❌ Error recreating order_id column:', recreateError.message);
+        throw recreateError;
+      }
+    }
+    
+  } catch (error) {
+    console.error('❌ Error fixing order_id column:', error.message);
+    throw error;
+  }
+};
+
+// Ensure gift_settings table exists
+db.ensureGiftSettingsTable = async function() {
+  try {
+    // Check if table exists
+    const [results] = await this.sequelize.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'gift_settings'
+      );
+    `);
+    
+    const tableExists = results[0].exists;
+    
+    if (!tableExists) {
+      console.log('🔧 Creating gift_settings table...');
+      
+      // First, create the ENUM type if it doesn't exist
+      await this.sequelize.query(`
+        DO $$ BEGIN
+          CREATE TYPE "enum_gift_settings_threshold_type" AS ENUM('amount', 'count');
+        EXCEPTION
+          WHEN duplicate_object THEN null;
+        END $$;
+      `);
+      
+      // Create the table
+      await this.sequelize.query(`
+        CREATE TABLE IF NOT EXISTS "gift_settings" (
+          "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          "threshold_type" "enum_gift_settings_threshold_type" NOT NULL DEFAULT 'amount',
+          "threshold_value" DECIMAL(10, 2) NOT NULL DEFAULT 0,
+          "is_active" BOOLEAN DEFAULT true,
+          "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+          "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+        );
+      `);
+      
+      console.log('✅ Created gift_settings table');
+    } else {
+      console.log('✅ gift_settings table already exists');
+    }
+  } catch (error) {
+    console.error('❌ Error ensuring gift_settings table:', error.message);
+    // Don't throw - let sync handle it
+  }
+};
+
+// Ensure partners table exists
+db.ensurePartnersTable = async function() {
+  try {
+    // Check if table exists
+    const [results] = await this.sequelize.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'partners'
+      );
+    `);
+    
+    const tableExists = results[0].exists;
+    
+    if (!tableExists) {
+      console.log('🔧 Creating partners table...');
+      
+      // Create the table
+      await this.sequelize.query(`
+        CREATE TABLE IF NOT EXISTS "partners" (
+          "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          "name" VARCHAR(255) NOT NULL,
+          "logo" VARCHAR(255) NOT NULL,
+          "website_url" VARCHAR(255),
+          "order" INTEGER NOT NULL DEFAULT 0,
+          "is_active" BOOLEAN NOT NULL DEFAULT true,
+          "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+          "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+        );
+      `);
+      
+      // Add indexes
+      await this.sequelize.query(`
+        CREATE INDEX IF NOT EXISTS "partners_order_idx" ON "partners" ("order");
+      `);
+      
+      await this.sequelize.query(`
+        CREATE INDEX IF NOT EXISTS "partners_is_active_idx" ON "partners" ("is_active");
+      `);
+      
+      console.log('✅ Created partners table');
+    } else {
+      console.log('✅ partners table already exists');
+    }
+  } catch (error) {
+    console.error('❌ Error ensuring partners table:', error.message);
+    // Don't throw - let sync handle it
   }
 };
 

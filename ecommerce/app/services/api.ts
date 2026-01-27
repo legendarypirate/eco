@@ -177,6 +177,11 @@ async getGoogleAuthUrl(): Promise<ApiResponse<{ auth_url: string }>> {
   async getActiveBankAccounts(): Promise<ApiResponse & { data?: any[] }> {
     return this.request('/bank-accounts/active', 'GET') as Promise<ApiResponse & { data?: any[] }>;
   }
+
+  // Banner methods
+  async getBanners(): Promise<ApiResponse & { data?: any[] }> {
+    return this.request('/banner/published', 'GET') as Promise<ApiResponse & { data?: any[] }>;
+  }
 }
 
 export const apiService = new ApiService();

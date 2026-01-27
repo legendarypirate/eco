@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '../context/AuthContext';
 import { X, Mail, Lock, Eye, EyeOff, User, Facebook, Chrome } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
@@ -14,6 +16,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleClose = () => {
     router.back();
@@ -25,11 +28,32 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     setIsLoading(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setIsLoading(false);
-    handleClose();
+    
+    try {
+      // Check if input is email or phone number
+      const credentials: any = { password };
+      
+      // Check if input looks like email
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (emailRegex.test(email)) {
+        credentials.email = email;
+      } else {
+        // Assume it's a phone number (Mongolian format)
+        credentials.phone = email;
+      }
+      
+      await login(credentials);
+      showToast('амжилттай нэвтэрлээ', 'success');
+      setTimeout(() => {
+        router.push('/');
+      }, 500);
+    } catch (error: any) {
+      setError(error.message || 'Нэвтрэхэд алдаа гарлаа. Та имэйл/утас болон нууц үгээ шалгана уу.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleGoogleLogin = () => {
@@ -40,6 +64,42 @@ export default function LoginPage() {
   const handleFacebookLogin = () => {
     // Facebook OAuth implementation
     window.location.href = '/api/auth/facebook';
+  };
+
+  // Toast notification function
+  const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
+    const toast = document.createElement('div');
+    toast.className = `fixed top-[100px] right-4 z-50 px-4 py-3 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full ${
+      type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' :
+      type === 'error' ? 'bg-red-50 border border-red-200 text-red-800' :
+      'bg-yellow-50 border border-yellow-200 text-yellow-800'
+    }`;
+    
+    toast.innerHTML = `
+      <div class="flex items-center">
+        <div class="mr-3">
+          ${type === 'success' ? '✅' : type === 'error' ? '❌' : '⚠️'}
+        </div>
+        <div class="font-medium">${message}</div>
+      </div>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // Animate in
+    setTimeout(() => {
+      toast.classList.remove('translate-x-full');
+    }, 10);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+      toast.classList.add('translate-x-full');
+      setTimeout(() => {
+        if (document.body.contains(toast)) {
+          document.body.removeChild(toast);
+        }
+      }, 300);
+    }, 3000);
   };
 
   return (
@@ -66,6 +126,13 @@ export default function LoginPage() {
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Нэвтрэх</h2>
               <p className="text-gray-600">Тавтай морилно уу</p>
             </div>
+
+            {/* Error Message */}
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+                {error}
+              </div>
+            )}
 
             {/* Social Login Buttons */}
             <div className="space-y-3 mb-8">
@@ -106,18 +173,18 @@ export default function LoginPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Имэйл хаяг
+                  Имэйл хаяг эсвэл Утасны дугаар
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <Mail className="h-5 w-5 text-gray-400" />
                   </div>
                   <input
-                    type="email"
+                    type="text"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full pl-10 pr-3 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="имэйл@жишээ.com"
+                    placeholder="имэйл@жишээ.com эсвэл 88123456"
                     required
                   />
                 </div>

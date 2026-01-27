@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Trash2, Edit2, Ticket, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Plus, Trash2, Edit2, Ticket, CheckCircle, XCircle, Clock, Search, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +22,13 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Coupon {
   id: number;
@@ -29,6 +36,7 @@ interface Coupon {
   discount_percentage: number;
   expires_at: string;
   is_active: boolean;
+  is_manual?: boolean;
   created_at?: string;
   updated_at?: string;
   usage_count?: number;
@@ -44,6 +52,21 @@ export default function CouponsPage() {
     discount_percentage: '',
     expires_at: '',
     is_active: true,
+    code: '',
+    count: '1',
+    generationType: 'random' as 'random' | 'manual',
+  });
+
+  // Search, filter, and pagination state
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [pagination, setPagination] = useState({
+    total: 0,
+    page: 1,
+    limit: 50,
+    totalPages: 1
   });
 
   const API_URL = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/coupons`;
@@ -56,14 +79,25 @@ export default function CouponsPage() {
     return null;
   };
 
-  // Fetch coupons
+  // Fetch coupons with search, filter, and pagination
   const fetchCoupons = async () => {
     try {
       setLoading(true);
       setError(null);
       const token = getAuthToken();
       
-      const response = await fetch(API_URL, {
+      // Build query parameters
+      const params = new URLSearchParams();
+      params.append('page', currentPage.toString());
+      params.append('limit', pageSize.toString());
+      if (searchTerm.trim()) {
+        params.append('search', searchTerm.trim());
+      }
+      if (statusFilter !== 'all') {
+        params.append('status', statusFilter);
+      }
+      
+      const response = await fetch(`${API_URL}?${params.toString()}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -76,6 +110,9 @@ export default function CouponsPage() {
       const result = await response.json();
       if (result.success) {
         setCoupons(result.data || []);
+        if (result.pagination) {
+          setPagination(result.pagination);
+        }
       } else {
         throw new Error(result.error || 'Failed to fetch coupons');
       }
@@ -107,9 +144,45 @@ export default function CouponsPage() {
         return;
       }
 
+      // Validate manual code if generation type is manual
+      if (!editingCoupon && formData.generationType === 'manual') {
+        if (!formData.code || formData.code.trim().length === 0) {
+          setError('Гараар үүсгэх тохиолдолд код оруулах шаардлагатай');
+          return;
+        }
+        if (formData.code.length > 50) {
+          setError('Код 50 тэмдэгтээс урт байж болохгүй');
+          return;
+        }
+      }
+
+      // Validate count if generating random coupons
+      if (!editingCoupon && formData.generationType === 'random') {
+        const count = parseInt(formData.count);
+        if (isNaN(count) || count < 1 || count > 100) {
+          setError('Кодны тоо 1-100 хооронд байх ёстой');
+          return;
+        }
+      }
+
       const token = getAuthToken();
       const url = editingCoupon ? `${API_URL}/${editingCoupon.id}` : API_URL;
       const method = editingCoupon ? 'PUT' : 'POST';
+
+      const requestBody: any = {
+        discount_percentage: discount,
+        expires_at: formData.expires_at,
+        is_active: formData.is_active,
+      };
+
+      // Add code or count based on generation type
+      if (!editingCoupon) {
+        if (formData.generationType === 'manual') {
+          requestBody.code = formData.code.toUpperCase().trim();
+        } else {
+          requestBody.count = parseInt(formData.count);
+        }
+      }
 
       const response = await fetch(url, {
         method,
@@ -117,11 +190,7 @@ export default function CouponsPage() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          discount_percentage: discount,
-          expires_at: formData.expires_at,
-          is_active: formData.is_active,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -200,6 +269,9 @@ export default function CouponsPage() {
       discount_percentage: '',
       expires_at: '',
       is_active: true,
+      code: '',
+      count: '1',
+      generationType: 'random',
     });
   };
 
@@ -220,10 +292,103 @@ export default function CouponsPage() {
     return new Date(expiresAt) < new Date();
   };
 
-  // Initial fetch
+  // Export to Excel
+  const exportToExcel = async () => {
+    try {
+      // Fetch all coupons for export (without pagination)
+      const token = getAuthToken();
+      const params = new URLSearchParams();
+      if (searchTerm.trim()) {
+        params.append('search', searchTerm.trim());
+      }
+      if (statusFilter !== 'all') {
+        params.append('status', statusFilter);
+      }
+      params.append('page', '1');
+      params.append('limit', '10000'); // Large limit to get all filtered results
+      
+      const response = await fetch(`${API_URL}?${params.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      const couponsToExport = result.data || [];
+
+      // Dynamically import xlsx
+      const XLSX = await import('xlsx');
+      
+      // Prepare data for Excel
+      const excelData = couponsToExport.map((coupon: Coupon) => {
+        const expired = isExpired(coupon.expires_at);
+        const isActive = coupon.is_active && !expired;
+        let status = 'Идэвхтэй';
+        if (expired) {
+          status = 'Хугацаа дууссан';
+        } else if (!coupon.is_active) {
+          status = 'Идэвхгүй';
+        }
+
+        return {
+          'Код': coupon.code,
+          'Хөнгөлөлт (%)': coupon.discount_percentage,
+          'Дуусах огноо': formatDate(coupon.expires_at),
+          'Ашиглалт': coupon.usage_count || 0,
+          'Төлөв': status,
+          'Төрөл': coupon.is_manual ? 'Олон хэрэглэгч' : 'Нэг удаа',
+          'Үүсгэсэн огноо': coupon.created_at ? formatDate(coupon.created_at) : '',
+        };
+      });
+
+      // Create workbook and worksheet
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Урамшууллын код');
+
+      // Set column widths
+      const columnWidths = [
+        { wch: 15 }, // Код
+        { wch: 12 }, // Хөнгөлөлт
+        { wch: 20 }, // Дуусах огноо
+        { wch: 12 }, // Ашиглалт
+        { wch: 18 }, // Төлөв
+        { wch: 15 }, // Төрөл
+        { wch: 20 }, // Үүсгэсэн огноо
+      ];
+      worksheet['!cols'] = columnWidths;
+
+      // Generate filename with current date
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0];
+      const filename = `Урамшууллын_код_${dateStr}.xlsx`;
+
+      // Write file
+      XLSX.writeFile(workbook, filename);
+    } catch (err) {
+      console.error('Error exporting to Excel:', err);
+      setError(err instanceof Error ? err.message : 'Excel файл экспорт хийхэд алдаа гарлаа');
+    }
+  };
+
+  // Handle search with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCurrentPage(1); // Reset to first page on search
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timer);
+  }, [searchTerm, statusFilter]);
+
+  // Fetch when filters, page, or pageSize changes
   useEffect(() => {
     fetchCoupons();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, pageSize, searchTerm, statusFilter]);
 
   if (loading) {
     return (
@@ -260,9 +425,9 @@ export default function CouponsPage() {
             <Ticket className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{coupons.length}</div>
+            <div className="text-2xl font-bold">{pagination.total || coupons.length}</div>
             <p className="text-xs text-muted-foreground">
-              Бүх урамшууллын код
+              {searchTerm || statusFilter !== 'all' ? 'Шүүлтүүрт тохирох код' : 'Бүх урамшууллын код'}
             </p>
           </CardContent>
         </Card>
@@ -320,10 +485,54 @@ export default function CouponsPage() {
         </div>
       )}
 
+      {/* Search and Filter */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-col md:flex-row gap-4 items-center">
+            <div className="relative flex-1 max-w-md w-full">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                type="text"
+                placeholder="Кодоор хайх..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Төлөв" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Бүх төлөв</SelectItem>
+                <SelectItem value="active">Идэвхтэй</SelectItem>
+                <SelectItem value="inactive">Идэвхгүй</SelectItem>
+                <SelectItem value="expired">Хугацаа дууссан</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Button 
+              variant="outline" 
+              onClick={exportToExcel}
+              className="flex items-center gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Excel экспорт
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Coupons Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Урамшууллын кодуудын жагсаалт</CardTitle>
+          <div className="flex justify-between items-center">
+            <CardTitle>Урамшууллын кодуудын жагсаалт</CardTitle>
+            <div className="text-sm text-gray-500">
+              Нийт: {pagination.total} код
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {coupons.length === 0 ? (
@@ -373,6 +582,16 @@ export default function CouponsPage() {
                         <span className="text-gray-600">
                           {coupon.usage_count || 0} удаа
                         </span>
+                        {coupon.is_manual && (
+                          <span className="text-xs text-blue-600 block mt-1">
+                            (Олон хэрэглэгч)
+                          </span>
+                        )}
+                        {!coupon.is_manual && (
+                          <span className="text-xs text-gray-500 block mt-1">
+                            (Нэг удаа)
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell>
                         {isActive ? (
@@ -417,6 +636,81 @@ export default function CouponsPage() {
               </TableBody>
             </Table>
           )}
+
+          {/* Pagination */}
+          {pagination.totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4 pt-4 border-t">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">
+                  Хуудас {pagination.page} / {pagination.totalPages}
+                </span>
+                <Select
+                  value={pageSize.toString()}
+                  onValueChange={(value) => {
+                    setPageSize(parseInt(value));
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-[100px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                
+                {/* Page numbers */}
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                    let pageNum: number;
+                    if (pagination.totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= pagination.totalPages - 2) {
+                      pageNum = pagination.totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(pageNum)}
+                        className="w-10"
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(pagination.totalPages, prev + 1))}
+                  disabled={currentPage === pagination.totalPages}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -433,7 +727,78 @@ export default function CouponsPage() {
               <div className="p-3 bg-gray-50 rounded-md">
                 <Label className="text-sm text-gray-600">Код</Label>
                 <p className="font-mono font-bold text-lg mt-1">{editingCoupon.code}</p>
-                <p className="text-xs text-gray-500 mt-1">Код автоматаар үүсгэгдсэн байна</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {editingCoupon.is_manual ? 'Гараар үүсгэсэн код (олон хэрэглэгч ашиглаж болно)' : 'Автоматаар үүсгэгдсэн код (зөвхөн нэг удаа ашиглах)'}
+                </p>
+              </div>
+            )}
+
+            {!editingCoupon && (
+              <div>
+                <Label>Код үүсгэх арга *</Label>
+                <div className="flex gap-4 mt-2">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="generationType"
+                      value="random"
+                      checked={formData.generationType === 'random'}
+                      onChange={(e) => setFormData({ ...formData, generationType: e.target.value as 'random' | 'manual' })}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm">Автоматаар үүсгэх (олон код)</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="generationType"
+                      value="manual"
+                      checked={formData.generationType === 'manual'}
+                      onChange={(e) => setFormData({ ...formData, generationType: e.target.value as 'random' | 'manual' })}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm">Гараар оруулах (нэг код)</span>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {!editingCoupon && formData.generationType === 'manual' && (
+              <div>
+                <Label htmlFor="code">
+                  Купон код *
+                </Label>
+                <Input
+                  id="code"
+                  type="text"
+                  value={formData.code}
+                  onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+                  placeholder="Жишээ: BNI-25"
+                  maxLength={50}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Гараар үүсгэсэн код олон хэрэглэгч ашиглаж болно (хэрэглэгч бүр нэг удаа)
+                </p>
+              </div>
+            )}
+
+            {!editingCoupon && formData.generationType === 'random' && (
+              <div>
+                <Label htmlFor="count">
+                  Үүсгэх кодуудын тоо *
+                </Label>
+                <Input
+                  id="count"
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={formData.count}
+                  onChange={(e) => setFormData({ ...formData, count: e.target.value })}
+                  placeholder="Жишээ: 10"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Автоматаар үүсгэсэн код зөвхөн нэг удаа ашиглах боломжтой (1-100 хооронд)
+                </p>
               </div>
             )}
             
@@ -483,10 +848,18 @@ export default function CouponsPage() {
               </Label>
             </div>
             
-            {!editingCoupon && (
+            {!editingCoupon && formData.generationType === 'random' && (
               <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
                 <p className="text-sm text-blue-800">
-                  <strong>Анхаар:</strong> Урамшууллын код автоматаар 6 тэмдэгттэй том үсгээр үүсгэгдэнэ.
+                  <strong>Анхаар:</strong> Автоматаар үүсгэсэн код зөвхөн нэг удаа ашиглах боломжтой.
+                </p>
+              </div>
+            )}
+
+            {!editingCoupon && formData.generationType === 'manual' && (
+              <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                <p className="text-sm text-green-800">
+                  <strong>Анхаар:</strong> Гараар үүсгэсэн код олон хэрэглэгч ашиглаж болно (хэрэглэгч бүр нэг удаа).
                 </p>
               </div>
             )}

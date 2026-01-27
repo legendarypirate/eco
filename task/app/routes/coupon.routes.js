@@ -8,6 +8,7 @@ module.exports = app => {
   router.post("/validate", coupon.validate);
 
   // Admin endpoints - require authentication
+  router.get("/stats", auth.verifyToken, coupon.getStatistics);
   router.get("/", auth.verifyToken, coupon.getAll);
   router.get("/:id", auth.verifyToken, coupon.getById);
   router.post("/", auth.verifyToken, coupon.create);

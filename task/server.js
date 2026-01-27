@@ -41,6 +41,15 @@ async function syncDatabase() {
     // First, fix the supervisor_id column type issue
     await db.fixSupervisorIdColumn();
     
+    // Fix the call_sales_activities.order_id column type issue
+    await db.fixCallSalesActivityOrderIdColumn();
+    
+    // Ensure gift_settings table exists
+    await db.ensureGiftSettingsTable();
+    
+    // Ensure partners table exists
+    await db.ensurePartnersTable();
+    
     // Then sync the database
     await db.sequelize.sync({ alter: true });
     console.log("Synced db.");
@@ -82,6 +91,11 @@ require('./app/routes/product_info_image.routes')(app);
 require('./app/routes/bank_account.routes')(app);
 require('./app/routes/footer.routes')(app);
 require('./app/routes/coupon.routes')(app);
+require('./app/routes/banner.routes')(app);
+require('./app/routes/complaint.routes')(app);
+require('./app/routes/call_sales_activity.routes')(app);
+require('./app/routes/gift_setting.routes')(app);
+require('./app/routes/partner.routes')(app);
 
 
 // Add error handling for undefined routes

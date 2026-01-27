@@ -51,7 +51,6 @@ const InvoiceModal = memo(({
             onChange={handleInvoiceInputChange}
             onKeyDown={handleKeyDown}
             label="Регистрийн дугаар"
-            required
             placeholder="Регистрийн дугаар"
           />
           <FormInput

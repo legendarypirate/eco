@@ -1,17 +1,27 @@
 module.exports = (sequelize, Sequelize) => {
     const Banner = sequelize.define("banner", {
       text: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING,
+        allowNull: true
       },
       link: {
         type: Sequelize.STRING,
-        defaultValue: 0
+        allowNull: true
       },
       image: {
         type: Sequelize.STRING,
+        allowNull: false
+      },
+      order: {
+        type: Sequelize.INTEGER,
+        allowNull: true,
         defaultValue: 0
       },
-    
+      isActive: {
+        type: Sequelize.BOOLEAN,
+        allowNull: false,
+        defaultValue: true
+      }
     });
   
     return Banner;

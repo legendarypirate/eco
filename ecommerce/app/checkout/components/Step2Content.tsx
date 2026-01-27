@@ -113,19 +113,7 @@ const Step2Content = ({
                 <div className="font-medium">QPay</div>
                 <div className="text-xs text-gray-500 mt-1">QR код, апп</div>
               </label>
-              <label
-                htmlFor="card"
-                className={`flex flex-col items-center justify-center rounded-lg border-2 bg-white p-4 hover:bg-gray-50 cursor-pointer transition-all ${
-                  paymentMethod === 'card' 
-                    ? 'border-gray-900 bg-gray-50 ring-2 ring-gray-900 ring-opacity-20' 
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <RadioGroupItem value="card" id="card" className="sr-only" />
-                <CreditCard className={`w-8 h-8 mb-2 ${paymentMethod === 'card' ? 'text-gray-900' : 'text-gray-400'}`} />
-                <div className="font-medium">Карт</div>
-                <div className="text-xs text-gray-500 mt-1">Visa, Mastercard</div>
-              </label>
+             
               <label
                 htmlFor="bank"
                 className={`flex flex-col items-center justify-center rounded-lg border-2 bg-white p-4 hover:bg-gray-50 cursor-pointer transition-all ${
@@ -176,17 +164,7 @@ const Step2Content = ({
                     )}
                   </div>
                   
-                  {qrText && (
-                    <div className="mb-6">
-                      <p className="text-sm text-gray-600 mb-2">Эсвэл QPay апп-аар доорх дугаарыг оруулна уу:</p>
-                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                        <code className="text-lg font-mono font-bold text-gray-900 break-all">
-                          {qrText}
-                        </code>
-                      </div>
-                    </div>
-                  )}
-                  
+                 
                   {/* Mobile App Links */}
                   {paymentUrls.length > 0 && (
                     <div className="mb-6 md:hidden">

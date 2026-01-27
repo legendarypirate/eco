@@ -97,6 +97,18 @@ module.exports = (sequelize, Sequelize) => {
             defaultValue: false,
             field: 'is_limited'
         },
+        isGift: {
+            type: Sequelize.BOOLEAN,
+            defaultValue: false,
+            field: 'is_gift'
+        },
+        giftFloorLimit: {
+            type: Sequelize.DECIMAL(10, 2),
+            allowNull: true,
+            defaultValue: null,
+            field: 'gift_floor_limit',
+            comment: 'Minimum cart total amount (in MNT) required to qualify for this gift product'
+        },
         discount: {
             type: Sequelize.DECIMAL(5, 2),
             defaultValue: 0

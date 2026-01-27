@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Home, Users, Settings, Clock, ShoppingCart, FolderOpen, Wallet, FileText, Ticket } from "lucide-react";
+import { Home, Users, Settings, Clock, ShoppingCart, FolderOpen, Wallet, FileText, Ticket, Image, MessageSquare, Phone, Gift, Handshake } from "lucide-react";
 import { useState, useEffect } from "react";
 
 const links = [
@@ -15,7 +15,12 @@ const links = [
   { href: "/admin/categories", label: "Ангилал", icon: FolderOpen },
   { href: "/admin/bank-accounts", label: "Банкны данс", icon: Wallet },
   { href: "/admin/coupons", label: "Урамшуулал", icon: Ticket },
+  { href: "/admin/banners", label: "Баннер", icon: Image },
   { href: "/admin/footer", label: "Footer", icon: FileText },
+  { href: "/admin/complaints", label: "Гомдол", icon: MessageSquare },
+  { href: "/admin/call-sales", label: "Утасны харилцаа", icon: Phone },
+  { href: "/admin/gift-settings", label: "Бэлгийн тохиргоо", icon: Gift },
+  { href: "/admin/partners", label: "Хамтран ажиллагсад", icon: Handshake },
 ];
 
 export function Sidebar() {
