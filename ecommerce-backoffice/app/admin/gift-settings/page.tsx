@@ -198,11 +198,8 @@ export default function GiftSettingsPage() {
     product.sku.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Get gift products count
-  const giftProductsCount = products.filter(p => {
-    const edited = editedProducts[p.id];
-    return edited ? edited.is_gift : p.is_gift;
-  }).length;
+  // Get gift products count (all products on this page are gifts since they're filtered)
+  const giftProductsCount = products.length;
 
   if (loading) {
     return (
