@@ -252,6 +252,9 @@ export default function CouponsPage() {
       discount_percentage: coupon.discount_percentage.toString(),
       expires_at: localDateTime,
       is_active: coupon.is_active,
+      code: coupon.code,
+      count: '1',
+      generationType: coupon.is_manual ? 'manual' : 'random',
     });
     setIsDialogOpen(true);
   };
