@@ -774,7 +774,17 @@ const CheckoutPageContent = () => {
       return;
     }
     
-    // Note: Address validation is not needed for invoice method (pickup)
+    // Validate address if delivery method is 'delivery'
+    if (currentFormData.deliveryMethod === 'delivery') {
+      if (!currentFormData.address || currentFormData.address.trim() === '') {
+        alert('Та хүргэлтийн хаягаа оруулна уу.');
+        return;
+      }
+      if (!currentFormData.city || currentFormData.city.trim() === '') {
+        alert('Та хот-оо оруулна уу.');
+        return;
+      }
+    }
     
     setInvoiceFormData({
       name: '',
@@ -796,7 +806,34 @@ const CheckoutPageContent = () => {
     try {
       setIsCreatingInvoice(true);
       
-      const fullShippingAddress = 'Ирж авах';
+      // Use latest form data if available, otherwise fall back to formData state
+      const currentFormData = latestFormDataForInvoice || formData;
+      
+      // Determine shipping address and cost based on delivery method
+      let fullShippingAddress = '';
+      let calculatedShipping = 0;
+      
+      if (currentFormData.deliveryMethod === 'delivery') {
+        // Хүргэлтээр: build full address
+        const shippingAddressParts = [
+          currentFormData.city,
+          currentFormData.district && `Дүүрэг: ${currentFormData.district}`,
+          currentFormData.khoroo && `Хороо: ${currentFormData.khoroo}`,
+          currentFormData.address
+        ].filter(Boolean);
+        fullShippingAddress = shippingAddressParts.join(', ').trim();
+        
+        if (!fullShippingAddress || fullShippingAddress.length < 3) {
+          throw new Error('Хүргэлтийн хаяг бүрэн оруулна уу');
+        }
+        
+        // Calculate shipping: 8800 if subtotal <= 120000, otherwise 0
+        calculatedShipping = subtotal > 120000 ? 0 : 8800;
+      } else {
+        // Ирж авах or invoice method
+        fullShippingAddress = 'Ирж авах';
+        calculatedShipping = 0;
+      }
 
       const orderItems = cartItems.map(item => ({
         productId: String(item.product.id || item.id || ''),
@@ -812,16 +849,18 @@ const CheckoutPageContent = () => {
         userId: isAuthenticated ? user?.id : `guest_${Date.now()}`,
         items: orderItems,
         subtotal: subtotal,
-        shippingCost: 0, // Ирж авах: 0
+        shippingCost: calculatedShipping,
         tax: 0,
-        grandTotal: subtotal, // Ирж авах: subtotal only
+        grandTotal: subtotal + calculatedShipping,
         paymentMethod: 1,
         shippingAddress: fullShippingAddress,
-        phoneNumber: invoiceFormData.phone || (latestFormDataForInvoice || formData).phone,
-        customerName: invoiceFormData.name || ((latestFormDataForInvoice || formData).lastName 
-          ? `${(latestFormDataForInvoice || formData).firstName} ${(latestFormDataForInvoice || formData).lastName}`.trim()
-          : (latestFormDataForInvoice || formData).firstName.trim()),
-        notes: (latestFormDataForInvoice || formData).note || null,
+        district: currentFormData.deliveryMethod === 'delivery' ? currentFormData.district || null : null,
+        khoroo: currentFormData.deliveryMethod === 'delivery' ? currentFormData.khoroo || null : null,
+        phoneNumber: invoiceFormData.phone || currentFormData.phone,
+        customerName: invoiceFormData.name || (currentFormData.lastName 
+          ? `${currentFormData.firstName} ${currentFormData.lastName}`.trim()
+          : currentFormData.firstName.trim()),
+        notes: currentFormData.note || null,
         invoiceData: {
           name: invoiceFormData.name,
           register: invoiceFormData.register,
@@ -944,8 +983,9 @@ const CheckoutPageContent = () => {
         },
         body: JSON.stringify({
           address: fullShippingAddress,
-          khoroo: '',
-          phone: invoiceFormData.phone || (latestFormDataForInvoice || formData).phone,
+          district: currentFormData.deliveryMethod === 'delivery' ? currentFormData.district || undefined : undefined,
+          khoroo: currentFormData.deliveryMethod === 'delivery' ? currentFormData.khoroo || undefined : undefined,
+          phone: invoiceFormData.phone || currentFormData.phone,
           invoiceData: invoiceFormData,
         }),
       });
@@ -967,8 +1007,8 @@ const CheckoutPageContent = () => {
       const subtotalWithoutVat = subtotal / taxMultiplier;
       const calculatedTax = subtotalWithoutVat * taxRate;
       const totalWithTax = subtotalWithoutVat + calculatedTax; // Should equal original subtotal
-      const shippingCost = 0; // Ирж авах: 0
-      const finalTotal = totalWithTax + shippingCost;
+      // Use calculated shipping cost (includes delivery fee if delivery method is 'delivery')
+      const finalTotal = totalWithTax + calculatedShipping;
       
       // Prepare invoice items (prices without VAT)
       const invoiceItems = cartItems.map(item => {
@@ -993,17 +1033,32 @@ const CheckoutPageContent = () => {
         return date.toISOString().split('T')[0];
       };
       
+      // Build customer address string
+      let customerAddressString = '';
+      if (currentFormData.deliveryMethod === 'delivery' && fullShippingAddress && fullShippingAddress !== 'Ирж авах') {
+        customerAddressString = fullShippingAddress;
+      } else if (currentFormData.deliveryMethod === 'invoice' && currentFormData.city && currentFormData.address) {
+        const addressParts = [
+          currentFormData.city,
+          currentFormData.district && `Дүүрэг: ${currentFormData.district}`,
+          currentFormData.khoroo && `Хороо: ${currentFormData.khoroo}`,
+          currentFormData.address
+        ].filter(Boolean);
+        customerAddressString = addressParts.join(', ').trim();
+      }
+
       // Issuer information (matching backend)
       const invoiceData: InvoiceData = {
         invoiceNumber: createdOrder.order_number || `INV-${createdOrder.id}`,
         invoiceDate: formatDate(today),
         dueDate: formatDate(dueDate),
-        customerName: invoiceFormData.name || ((latestFormDataForInvoice || formData).lastName 
-          ? `${(latestFormDataForInvoice || formData).firstName} ${(latestFormDataForInvoice || formData).lastName}`.trim()
-          : (latestFormDataForInvoice || formData).firstName.trim()),
-        customerEmail: invoiceFormData.email || (latestFormDataForInvoice || formData).email || '',
-        customerPhone: invoiceFormData.phone || (latestFormDataForInvoice || formData).phone || '',
+        customerName: invoiceFormData.name || (currentFormData.lastName 
+          ? `${currentFormData.firstName} ${currentFormData.lastName}`.trim()
+          : currentFormData.firstName.trim()),
+        customerEmail: invoiceFormData.email || currentFormData.email || '',
+        customerPhone: invoiceFormData.phone || currentFormData.phone || '',
         customerRegister: invoiceFormData.register || undefined,
+        customerAddress: customerAddressString || undefined,
         issuerName: 'ТЭРГҮҮН ГЭРЭГЭ ХХК',
         issuerRegister: '6002536',
         issuerEmail: '',
@@ -1017,8 +1072,9 @@ const CheckoutPageContent = () => {
         items: invoiceItems,
         subtotal: subtotalWithoutVat,
         tax: calculatedTax,
+        shipping: calculatedShipping > 0 ? calculatedShipping : undefined,
         total: finalTotal,
-        notes: (latestFormDataForInvoice || formData).note || undefined,
+        notes: currentFormData.note || undefined,
       };
       
       // Generate and download PDF
@@ -1029,9 +1085,9 @@ const CheckoutPageContent = () => {
       // Store order totals before clearing cart
       setStoredOrderTotals({
         subtotal,
-        shipping: 0, // Invoice method has 0 shipping
+        shipping: calculatedShipping, // Include shipping if delivery method
         couponDiscount: 0, // Invoice doesn't use coupons
-        total: subtotal,
+        total: subtotal + calculatedShipping,
       });
 
       clearCart();

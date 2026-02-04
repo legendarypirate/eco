@@ -112,6 +112,7 @@ interface InvoiceData {
   customerEmail: string;
   customerPhone: string;
   customerRegister?: string;
+  customerAddress?: string;
   issuerName: string;
   issuerRegister: string;
   issuerEmail: string;
@@ -125,7 +126,8 @@ interface InvoiceData {
   items: InvoiceItem[];
   subtotal: number; // Without VAT
   tax: number; // VAT amount
-  total: number; // With VAT
+  shipping?: number; // Shipping cost
+  total: number; // With VAT and shipping
   notes?: string;
 }
 
@@ -199,6 +201,12 @@ export async function generateInvoicePDF(data: InvoiceData): Promise<void> {
             <span>${data.customerRegister}</span>
           </div>
           ` : ''}
+          ${data.customerAddress ? `
+          <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+            <span style="font-weight: bold; min-width: 120px;">Хаяг:</span>
+            <span>${data.customerAddress}</span>
+          </div>
+          ` : ''}
           <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
             <span style="font-weight: bold; min-width: 120px;">Имэйл:</span>
             <span>${data.customerEmail}</span>
@@ -247,7 +255,20 @@ export async function generateInvoicePDF(data: InvoiceData): Promise<void> {
       </table>
       
       <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #333;">
-        
+        <div style="display: flex; justify-content: space-between; margin-top: 8px; padding-top: 8px; border-top: 1px solid #ddd; font-size: 10pt;">
+          <span>Дэд дүн (НӨАТ-гүй):</span>
+          <span>${data.subtotal.toFixed(2)} ₮</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-top: 8px; padding-top: 8px; font-size: 10pt;">
+          <span>НӨАТ (10%):</span>
+          <span>${data.tax.toFixed(2)} ₮</span>
+        </div>
+        ${data.shipping && data.shipping > 0 ? `
+        <div style="display: flex; justify-content: space-between; margin-top: 8px; padding-top: 8px; font-size: 10pt;">
+          <span>Хүргэлтийн төлбөр:</span>
+          <span>${data.shipping.toFixed(2)} ₮</span>
+        </div>
+        ` : ''}
         <div style="display: flex; justify-content: space-between; margin-top: 8px; padding-top: 8px; border-top: 1px solid #ddd; font-size: 11pt; font-weight: bold; color: #e74c3c;">
           <span>Татвартай нийт дүн:</span>
           <span>${data.total.toFixed(2)} ₮</span>

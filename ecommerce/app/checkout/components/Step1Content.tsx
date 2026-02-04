@@ -571,7 +571,10 @@ const Step1Content = ({
               variant="blue"
             >
               <FileText className="w-4 h-4" />
-              {isCreatingInvoice ? 'Нэхэмжлэх үүсгэж байна...' : `Нэхэмжлэх авах - ${formatPrice(subtotal)}`}
+              {isCreatingInvoice ? 'Нэхэмжлэх үүсгэж байна...' : 
+                deliveryMethod === 'delivery' 
+                  ? `Нэхэмжлэх авах - ${formatPrice(total)}`
+                  : `Нэхэмжлэх авах - Бараа: ${formatPrice(subtotal)} (хүргэлт ороогүй), Нийт: ${formatPrice(subtotal)}`}
             </Button>
             <Button
               type="submit"
