@@ -580,7 +580,9 @@ exports.findByOrderNumber = (req, res) => {
 exports.update = (req, res) => {
   const id = req.params.id;
 
-  Order.findByPk(id)
+  Order.findByPk(id, {
+    include: [{ model: OrderItem, as: "items" }]
+  })
     .then(order => {
       if (!order) {
         res.status(404).json({
@@ -613,15 +615,85 @@ exports.update = (req, res) => {
       if (req.body.notes !== undefined) {
         updateData.notes = req.body.notes;
       }
+      if (req.body.district !== undefined) {
+        updateData.district = req.body.district;
+      }
+      if (req.body.khoroo !== undefined) {
+        updateData.khoroo = req.body.khoroo;
+      }
 
-      return order.update(updateData);
+      // Handle order items update if provided
+      if (req.body.items && Array.isArray(req.body.items)) {
+        return Promise.all(
+          req.body.items.map(item => {
+            if (item.id) {
+              // Update existing item
+              return OrderItem.update(
+                {
+                  name: item.name,
+                  name_mn: item.nameMn || item.name,
+                  price: parseFloat(item.price) || 0,
+                  quantity: parseInt(item.quantity) || 1
+                },
+                { where: { id: item.id, order_id: order.id } }
+              );
+            } else {
+              // Create new item
+              return OrderItem.create({
+                order_id: order.id,
+                product_id: item.productId || "",
+                name: item.name || "Бараа",
+                name_mn: item.nameMn || item.name || "Бараа",
+                price: parseFloat(item.price) || 0,
+                quantity: parseInt(item.quantity) || 1,
+                image: item.image || null,
+                sku: item.sku || null,
+                created_at: new Date()
+              });
+            }
+          })
+        ).then(() => {
+          // Recalculate totals after items update
+          return OrderItem.findAll({ where: { order_id: order.id } })
+            .then(items => {
+              const subtotal = items.reduce((sum, item) => {
+                return sum + (parseFloat(item.price) * parseInt(item.quantity));
+              }, 0);
+              
+              const shippingCost = parseFloat(order.shipping_cost) || 5000;
+              const tax = parseFloat(order.tax) || 0;
+              const grandTotal = subtotal + shippingCost + tax;
+
+              updateData.subtotal = subtotal;
+              updateData.grand_total = grandTotal;
+
+              return order.update(updateData);
+            });
+        });
+      } else {
+        // No items to update, just update order fields
+        return order.update(updateData);
+      }
     })
     .then(updatedOrder => {
       if (updatedOrder) {
+        // Return order with items
+        return Order.findOne({
+          where: { id: updatedOrder.id },
+          include: [{ model: OrderItem, as: "items" }],
+          attributes: {
+            exclude: ['qr_image']
+          }
+        });
+      }
+      return null;
+    })
+    .then(fullOrder => {
+      if (fullOrder) {
         res.json({
           success: true,
           message: "Захиалга амжилттай шинэчлэгдлээ.",
-          order: updatedOrder
+          order: cleanOrderData(fullOrder)
         });
       }
     })

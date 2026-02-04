@@ -4,6 +4,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { 
   Dialog, 
   DialogContent, 
@@ -22,9 +24,14 @@ import { Search, Eye, Edit, Truck, CheckCircle, XCircle, Printer } from "lucide-
 import { useState, useEffect } from "react";
 
 type OrderItem = {
+  id?: number;
   name: string;
   qty: number;
   price: number;
+  productId?: string;
+  nameMn?: string;
+  image?: string;
+  sku?: string;
 };
 
 type Order = {
@@ -39,6 +46,7 @@ type Order = {
   address?: string;
   district?: string;
   khoroo?: string;
+  notes?: string;
 };
 
 export default function AdminOrderList() {
@@ -167,9 +175,14 @@ function OrderPage() {
             status: mapOrderStatus(order.order_status),
             payment_status: mapPaymentStatus(order.payment_status),
             items: (order.items || []).map((item: any) => ({
+              id: item.id,
               name: item.name || item.name_mn || "Бараа",
               qty: item.quantity || 1,
               price: parseFloat(item.price) || 0,
+              productId: item.product_id,
+              nameMn: item.name_mn,
+              image: item.image,
+              sku: item.sku,
             })),
             total: parseFloat(order.grand_total) || 0,
             customer_name: order.customer_name,
@@ -178,6 +191,7 @@ function OrderPage() {
             // Use database fields first, fallback to parsed values
             district: order.district || addressComponents.district || null,
             khoroo: order.khoroo || addressComponents.khoroo || null,
+            notes: order.notes || null,
           };
         });
         
@@ -293,6 +307,94 @@ function OrderPage() {
     } catch (err) {
       console.error('Error updating payment status:', err);
       setError(err instanceof Error ? err.message : 'Failed to update payment status');
+    }
+  };
+
+  // Update all order fields via API
+  const updateOrder = async (order: Order) => {
+    try {
+      // Map frontend status to backend status
+      const statusMap: Record<Order["status"], number> = {
+        pending: 0,
+        processing: 0,
+        shipped: 1,
+        delivered: 2,
+        cancelled: 3,
+      };
+
+      const paymentMap: Record<Order["payment_status"], number> = {
+        paid: 1,
+        unpaid: 0,
+        refunded: 3,
+      };
+
+      // Find order by order_number to get actual ID
+      const response = await fetch(`${API_URL}/number/${order.id}`, {
+        method: 'GET',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to find order');
+      }
+
+      const orderData = await response.json();
+      const actualOrderId = orderData.order?.id;
+
+      if (!actualOrderId) {
+        throw new Error('Order ID not found');
+      }
+
+      // Build shipping address from components
+      let shippingAddress = order.address || '';
+      if (order.district || order.khoroo) {
+        const parts = [];
+        if (order.district) parts.push(`Дүүрэг: ${order.district}`);
+        if (order.khoroo) parts.push(`Хороо: ${order.khoroo}`);
+        if (order.address) parts.push(order.address);
+        shippingAddress = parts.join(', ');
+      }
+
+      // Prepare update payload
+      const updatePayload: any = {
+        order_status: statusMap[order.status],
+        payment_status: paymentMap[order.payment_status],
+        customer_name: order.customer_name || '',
+        phone_number: order.customer_phone || '',
+        shipping_address: shippingAddress,
+        district: order.district || null,
+        khoroo: order.khoroo || null,
+        notes: order.notes || null,
+        items: order.items.map(item => ({
+          id: item.id,
+          name: item.name,
+          nameMn: item.nameMn || item.name,
+          price: item.price,
+          quantity: item.qty,
+          productId: item.productId || '',
+          image: item.image,
+          sku: item.sku,
+        })),
+      };
+
+      const updateResponse = await fetch(`${API_URL}/${actualOrderId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatePayload),
+      });
+
+      if (!updateResponse.ok) {
+        const errorData = await updateResponse.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to update order');
+      }
+
+      // Refresh orders after update
+      await fetchOrders();
+    } catch (err) {
+      console.error('Error updating order:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update order');
+      throw err;
     }
   };
 
@@ -780,6 +882,13 @@ function OrderPage() {
               <div className="text-right text-xl font-bold border-t pt-4">
                 Нийт дүн: {selectedOrder.total.toLocaleString()}₮
               </div>
+
+              {selectedOrder.notes && (
+                <div>
+                  <h4 className="font-semibold mb-2">Тэмдэглэл</h4>
+                  <p className="text-sm text-gray-600 whitespace-pre-wrap">{selectedOrder.notes}</p>
+                </div>
+              )}
             </div>
           )}
           <DialogFooter>
@@ -790,15 +899,16 @@ function OrderPage() {
 
       {/* Edit Order Dialog */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Захиалга засах #{selectedOrder?.id}</DialogTitle>
           </DialogHeader>
           {selectedOrder && (
-            <div className="space-y-4">
+            <div className="space-y-6">
+              {/* Order Status and Payment Status */}
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium">Төлөв</label>
+                <div className="space-y-2">
+                  <Label>Төлөв</Label>
                   <Select 
                     value={selectedOrder.status} 
                     onValueChange={(value: Order["status"]) => 
@@ -818,8 +928,8 @@ function OrderPage() {
                   </Select>
                 </div>
 
-                <div>
-                  <label className="text-sm font-medium">Төлбөрийн төлөв</label>
+                <div className="space-y-2">
+                  <Label>Төлбөрийн төлөв</Label>
                   <Select 
                     value={selectedOrder.payment_status} 
                     onValueChange={(value: Order["payment_status"]) => 
@@ -840,45 +950,131 @@ function OrderPage() {
                 </div>
               </div>
 
-              <div>
-                <h4 className="font-semibold mb-2">Бараанууд</h4>
-                <div className="space-y-2">
+              {/* Customer Information */}
+              <div className="space-y-4">
+                <h4 className="font-semibold text-lg">Харилцагчийн мэдээлэл</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Харилцагчийн нэр</Label>
+                    <Input
+                      value={selectedOrder.customer_name || ''}
+                      onChange={(e) => 
+                        setSelectedOrder({...selectedOrder, customer_name: e.target.value})
+                      }
+                      placeholder="Харилцагчийн нэр"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Утасны дугаар</Label>
+                    <Input
+                      value={selectedOrder.customer_phone || ''}
+                      onChange={(e) => 
+                        setSelectedOrder({...selectedOrder, customer_phone: e.target.value})
+                      }
+                      placeholder="Утасны дугаар"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Дүүрэг</Label>
+                    <Input
+                      value={selectedOrder.district || ''}
+                      onChange={(e) => 
+                        setSelectedOrder({...selectedOrder, district: e.target.value})
+                      }
+                      placeholder="Дүүрэг"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Хороо</Label>
+                    <Input
+                      value={selectedOrder.khoroo || ''}
+                      onChange={(e) => 
+                        setSelectedOrder({...selectedOrder, khoroo: e.target.value})
+                      }
+                      placeholder="Хороо"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Дэлгэрэнгүй хаяг</Label>
+                    <Input
+                      value={selectedOrder.address || ''}
+                      onChange={(e) => 
+                        setSelectedOrder({...selectedOrder, address: e.target.value})
+                      }
+                      placeholder="Дэлгэрэнгүй хаяг"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Order Items */}
+              <div className="space-y-4">
+                <h4 className="font-semibold text-lg">Бараанууд</h4>
+                <div className="space-y-3">
                   {selectedOrder.items.map((item, i) => (
-                    <div key={i} className="flex gap-4 items-center p-2 border rounded">
-                      <Input
-                        value={item.name}
-                        onChange={(e) => {
-                          const newItems = [...selectedOrder.items];
-                          newItems[i].name = e.target.value;
-                          setSelectedOrder({...selectedOrder, items: newItems});
-                        }}
-                        placeholder="Барааны нэр"
-                      />
-                      <Input
-                        type="number"
-                        value={item.qty}
-                        onChange={(e) => {
-                          const newItems = [...selectedOrder.items];
-                          newItems[i].qty = parseInt(e.target.value) || 0;
-                          setSelectedOrder({...selectedOrder, items: newItems});
-                        }}
-                        className="w-20"
-                        placeholder="Тоо"
-                      />
-                      <Input
-                        type="number"
-                        value={item.price}
-                        onChange={(e) => {
-                          const newItems = [...selectedOrder.items];
-                          newItems[i].price = parseInt(e.target.value) || 0;
-                          setSelectedOrder({...selectedOrder, items: newItems});
-                        }}
-                        className="w-32"
-                        placeholder="Үнэ"
-                      />
+                    <div key={i} className="grid grid-cols-12 gap-2 items-center p-3 border rounded-lg">
+                      <div className="col-span-5">
+                        <Input
+                          value={item.name}
+                          onChange={(e) => {
+                            const newItems = [...selectedOrder.items];
+                            newItems[i].name = e.target.value;
+                            setSelectedOrder({...selectedOrder, items: newItems});
+                          }}
+                          placeholder="Барааны нэр"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Input
+                          type="number"
+                          value={item.qty}
+                          onChange={(e) => {
+                            const newItems = [...selectedOrder.items];
+                            newItems[i].qty = parseInt(e.target.value) || 0;
+                            setSelectedOrder({...selectedOrder, items: newItems});
+                          }}
+                          placeholder="Тоо"
+                          min="1"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <Input
+                          type="number"
+                          value={item.price}
+                          onChange={(e) => {
+                            const newItems = [...selectedOrder.items];
+                            newItems[i].price = parseFloat(e.target.value) || 0;
+                            setSelectedOrder({...selectedOrder, items: newItems});
+                          }}
+                          placeholder="Үнэ"
+                          min="0"
+                          step="0.01"
+                        />
+                      </div>
+                      <div className="col-span-2 text-right font-medium">
+                        {(item.qty * item.price).toLocaleString()}₮
+                      </div>
                     </div>
                   ))}
                 </div>
+                <div className="text-right text-lg font-bold border-t pt-2">
+                  Нийт: {selectedOrder.items.reduce((sum, item) => sum + (item.qty * item.price), 0).toLocaleString()}₮
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div className="space-y-2">
+                <Label>Тэмдэглэл</Label>
+                <Textarea
+                  value={selectedOrder.notes || ''}
+                  onChange={(e) => 
+                    setSelectedOrder({...selectedOrder, notes: e.target.value})
+                  }
+                  placeholder="Тэмдэглэл оруулах..."
+                  rows={3}
+                />
               </div>
             </div>
           )}
@@ -886,10 +1082,12 @@ function OrderPage() {
             <Button variant="outline" onClick={() => setIsEditOpen(false)}>Цуцлах</Button>
             <Button onClick={async () => {
               if (selectedOrder) {
-                // Update status and payment status via API
-                await handleStatusChange(selectedOrder.id, selectedOrder.status);
-                await handlePaymentStatusChange(selectedOrder.id, selectedOrder.payment_status);
-                setIsEditOpen(false);
+                try {
+                  await updateOrder(selectedOrder);
+                  setIsEditOpen(false);
+                } catch (err) {
+                  // Error is already handled in updateOrder
+                }
               }
             }}>Хадгалах</Button>
           </DialogFooter>
