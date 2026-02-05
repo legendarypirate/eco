@@ -244,26 +244,64 @@ const callChuchuAPI = async (order, options = {}) => {
     let customerRegister = null;
     let customerEmail = null;
 
+    // DEBUG: Log what we're receiving
+    console.log('=== DEBUG callChuchuAPI for order:', order.order_number || order.id, '===');
+    console.log('order.invoice_data type:', typeof order.invoice_data);
+    console.log('order.invoice_data value:', order.invoice_data);
+    console.log('options:', JSON.stringify(options, null, 2));
+
     if (order.invoice_data) {
       try {
         const invoiceData = typeof order.invoice_data === 'string' 
           ? JSON.parse(order.invoice_data) 
           : order.invoice_data;
         
+        console.log('Parsed invoice_data:', JSON.stringify(invoiceData, null, 2));
+        
         invoiceNumber = invoiceData.invoiceNumber || invoiceData.invoice_number || null;
         invoiceDate = invoiceData.invoiceDate || invoiceData.invoice_date || null;
-        customerRegister = invoiceData.customerRegister || invoiceData.customer_register || null;
-        customerEmail = invoiceData.customerEmail || invoiceData.customer_email || null;
+        // Check multiple possible field names for register and email
+        customerRegister = invoiceData.customerRegister || invoiceData.customer_register || invoiceData.register || null;
+        customerEmail = invoiceData.customerEmail || invoiceData.customer_email || invoiceData.email || null;
+        
+        console.log('Extracted from invoice_data:', {
+          invoiceNumber,
+          invoiceDate,
+          customerRegister,
+          customerEmail
+        });
       } catch (e) {
         console.warn('Error parsing invoice_data for chuchu API:', e);
+        console.warn('Raw invoice_data that failed to parse:', order.invoice_data);
       }
+    } else {
+      console.log('No invoice_data found in order');
     }
 
     // Also check options for invoice fields (in case they're passed directly)
-    if (options.invoice_number) invoiceNumber = options.invoice_number;
-    if (options.invoice_date) invoiceDate = options.invoice_date;
-    if (options.customer_register) customerRegister = options.customer_register;
-    if (options.customer_email) customerEmail = options.customer_email;
+    if (options.invoice_number) {
+      console.log('Overriding invoice_number from options:', options.invoice_number);
+      invoiceNumber = options.invoice_number;
+    }
+    if (options.invoice_date) {
+      console.log('Overriding invoice_date from options:', options.invoice_date);
+      invoiceDate = options.invoice_date;
+    }
+    if (options.customer_register) {
+      console.log('Overriding customer_register from options:', options.customer_register);
+      customerRegister = options.customer_register;
+    }
+    if (options.customer_email) {
+      console.log('Overriding customer_email from options:', options.customer_email);
+      customerEmail = options.customer_email;
+    }
+
+    console.log('Final invoice field values before sending to chuchu:', {
+      invoice_number: invoiceNumber,
+      invoice_date: invoiceDate,
+      customer_register: customerRegister,
+      customer_email: customerEmail
+    });
 
     // Call chuchu API
     const chuchuUrl = "https://e-chuchu.mn/api/v1/tsaas/delivery/create";
@@ -1402,13 +1440,46 @@ exports.createChuchuDelivery = async (req, res) => {
       });
     }
 
+    // Extract invoice fields from invoice_data
+    let invoiceNumber = null;
+    let invoiceDate = null;
+    let customerRegister = null;
+    let customerEmail = null;
+    
+    if (order.invoice_data) {
+      try {
+        const parsedInvoiceData = typeof order.invoice_data === 'string' 
+          ? JSON.parse(order.invoice_data) 
+          : order.invoice_data;
+        
+        invoiceNumber = parsedInvoiceData.invoiceNumber || parsedInvoiceData.invoice_number || order.order_number || null;
+        invoiceDate = parsedInvoiceData.invoiceDate || parsedInvoiceData.invoice_date || null;
+        // Check multiple possible field names for register and email
+        customerRegister = parsedInvoiceData.customerRegister || parsedInvoiceData.customer_register || parsedInvoiceData.register || null;
+        customerEmail = parsedInvoiceData.customerEmail || parsedInvoiceData.customer_email || parsedInvoiceData.email || null;
+        
+        console.log('createChuchuDelivery - Extracted invoice fields:', {
+          invoiceNumber,
+          invoiceDate,
+          customerRegister,
+          customerEmail
+        });
+      } catch (e) {
+        console.warn('Error parsing invoice_data in createChuchuDelivery:', e);
+      }
+    }
+
     // Use the helper function to call e-chuchu API (for all orders including pickup)
     const chuchuResult = await callChuchuAPI(order, {
       address: order.shipping_address,
       district: order.district,
       khoroo: order.khoroo,
       phone: order.phone_number,
-      comment: ""
+      comment: "",
+      invoice_number: invoiceNumber,
+      invoice_date: invoiceDate,
+      customer_register: customerRegister,
+      customer_email: customerEmail
     });
 
     if (!chuchuResult.success) {
