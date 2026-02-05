@@ -238,6 +238,33 @@ const callChuchuAPI = async (order, options = {}) => {
     if (detailedAddress) fullAddressParts.push(detailedAddress);
     const fullAddress = fullAddressParts.join(', ');
 
+    // Parse invoice_data to extract invoice fields
+    let invoiceNumber = null;
+    let invoiceDate = null;
+    let customerRegister = null;
+    let customerEmail = null;
+
+    if (order.invoice_data) {
+      try {
+        const invoiceData = typeof order.invoice_data === 'string' 
+          ? JSON.parse(order.invoice_data) 
+          : order.invoice_data;
+        
+        invoiceNumber = invoiceData.invoiceNumber || invoiceData.invoice_number || null;
+        invoiceDate = invoiceData.invoiceDate || invoiceData.invoice_date || null;
+        customerRegister = invoiceData.customerRegister || invoiceData.customer_register || null;
+        customerEmail = invoiceData.customerEmail || invoiceData.customer_email || null;
+      } catch (e) {
+        console.warn('Error parsing invoice_data for chuchu API:', e);
+      }
+    }
+
+    // Also check options for invoice fields (in case they're passed directly)
+    if (options.invoice_number) invoiceNumber = options.invoice_number;
+    if (options.invoice_date) invoiceDate = options.invoice_date;
+    if (options.customer_register) customerRegister = options.customer_register;
+    if (options.customer_email) customerEmail = options.customer_email;
+
     // Call chuchu API
     const chuchuUrl = "https://e-chuchu.mn/api/v1/tsaas/delivery/create";
     const chuchuData = {
@@ -246,12 +273,16 @@ const callChuchuAPI = async (order, options = {}) => {
       parcel_info: parcelInfo,
       phone: options.phone || order.phone_number || "",
       phone2: options.phone2 || "",
-      phone2: "",
       address: fullAddress || shippingAddress,
       comment: options.comment || khoroo || "",
       number: totalItems,
       price: order.grand_total.toString(),
-      track: order.id.toString()
+      track: order.id.toString(),
+      // Invoice fields
+      invoice_number: invoiceNumber || "",
+      invoice_date: invoiceDate || "",
+      customer_register: customerRegister || "",
+      customer_email: customerEmail || ""
     };
 
     console.log('Calling e-chuchu API for order:', order.order_number, chuchuData);
