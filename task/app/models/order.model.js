@@ -104,6 +104,12 @@ module.exports = (sequelize, Sequelize) => {
             allowNull: true,
             comment: "Timestamp when order status changed to processing (боловсруулж байна)"
         },
+        isDeleted: {
+            type: Sequelize.BOOLEAN,
+            allowNull: false,
+            defaultValue: false,
+            comment: "Soft delete flag - true if order is deleted"
+        },
         created_at: {
             type: Sequelize.DATE,
             defaultValue: Sequelize.NOW

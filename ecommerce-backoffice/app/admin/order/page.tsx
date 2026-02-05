@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Eye, Edit, Truck, CheckCircle, XCircle, Printer } from "lucide-react";
+import { Search, Eye, Edit, Truck, CheckCircle, XCircle, Printer, Trash2, ChevronLeft, ChevronRight, QrCode, UserCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 
 type OrderItem = {
@@ -47,6 +47,12 @@ type Order = {
   district?: string;
   khoroo?: string;
   notes?: string;
+  invoice_name?: string;
+  invoice_register?: string;
+  invoice_email?: string;
+  invoice_phone?: string;
+  invoice_id?: string;
+  payment_method?: number;
 };
 
 export default function AdminOrderList() {
@@ -61,8 +67,20 @@ function OrderPage() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  
+  // Date filter state
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
 
   // API base URL
   const API_URL = `${process.env.NEXT_PUBLIC_API_URL}/api/order`;
@@ -157,7 +175,44 @@ function OrderPage() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`${API_URL}/admin/all`);
+      
+      // Build query parameters
+      const params = new URLSearchParams();
+      params.append('page', currentPage.toString());
+      params.append('limit', pageSize.toString());
+      
+      if (startDate) {
+        params.append('start_date', startDate);
+      }
+      if (endDate) {
+        params.append('end_date', endDate);
+      }
+      if (statusFilter !== 'all') {
+        // Map frontend status to backend status
+        // Note: "pending" doesn't exist in backend, it's treated as "processing" (0)
+        const statusMap: Record<string, number> = {
+          pending: 0, // Backend doesn't have pending, treat as processing
+          processing: 0,
+          shipped: 1,
+          delivered: 2,
+          cancelled: 3,
+        };
+        const backendStatus = statusMap[statusFilter];
+        if (backendStatus !== undefined) {
+          params.append('order_status', backendStatus.toString());
+        }
+      }
+      if (paymentFilter !== 'all') {
+        // Map frontend payment status to backend status
+        const paymentMap: Record<string, number> = {
+          paid: 1,
+          unpaid: 0,
+          refunded: 3,
+        };
+        params.append('payment_status', paymentMap[paymentFilter]?.toString() || '');
+      }
+      
+      const response = await fetch(`${API_URL}/admin/all?${params.toString()}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -169,6 +224,19 @@ function OrderPage() {
         // Transform backend data to frontend format
         const transformedOrders: Order[] = data.orders.map((order: any) => {
           const addressComponents = parseAddressComponents(order.shipping_address || '');
+          
+          // Parse invoice_data if it exists
+          let invoiceData = null;
+          if (order.invoice_data) {
+            try {
+              invoiceData = typeof order.invoice_data === 'string' 
+                ? JSON.parse(order.invoice_data) 
+                : order.invoice_data;
+            } catch (e) {
+              console.error('Error parsing invoice_data:', e);
+            }
+          }
+          
           return {
             id: order.order_number || String(order.id),
             created_at: formatDate(order.created_at),
@@ -192,12 +260,23 @@ function OrderPage() {
             district: order.district || addressComponents.district || null,
             khoroo: order.khoroo || addressComponents.khoroo || null,
             notes: order.notes || null,
+            invoice_id: order.invoice_id || null,
+            payment_method: order.payment_method !== undefined ? order.payment_method : null,
+            // Invoice data
+            invoice_name: invoiceData?.name || null,
+            invoice_register: invoiceData?.register || null,
+            invoice_email: invoiceData?.email || null,
+            invoice_phone: invoiceData?.phone || null,
           };
         });
         
         setOrders(transformedOrders);
+        setTotal(data.total || 0);
+        setTotalPages(data.totalPages || 1);
       } else {
         setOrders([]);
+        setTotal(0);
+        setTotalPages(1);
       }
     } catch (err) {
       console.error('Error fetching orders:', err);
@@ -354,6 +433,17 @@ function OrderPage() {
         shippingAddress = parts.join(', ');
       }
 
+      // Prepare invoice data if any invoice fields are present
+      let invoiceData = null;
+      if (order.invoice_name || order.invoice_register || order.invoice_email || order.invoice_phone) {
+        invoiceData = {
+          name: order.invoice_name || '',
+          register: order.invoice_register || '',
+          email: order.invoice_email || '',
+          phone: order.invoice_phone || '',
+        };
+      }
+
       // Prepare update payload
       const updatePayload: any = {
         order_status: statusMap[order.status],
@@ -375,6 +465,11 @@ function OrderPage() {
           sku: item.sku,
         })),
       };
+
+      // Add invoice_data if present
+      if (invoiceData) {
+        updatePayload.invoiceData = invoiceData;
+      }
 
       const updateResponse = await fetch(`${API_URL}/${actualOrderId}`, {
         method: 'PATCH',
@@ -398,10 +493,27 @@ function OrderPage() {
     }
   };
 
-  // Fetch orders on component mount
+  // Reset to page 1 when filters change (except currentPage and pageSize)
+  useEffect(() => {
+    setCurrentPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDate, endDate, statusFilter, paymentFilter]);
+  
+  // Fetch orders when pagination or filters change
   useEffect(() => {
     fetchOrders();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, pageSize, startDate, endDate, statusFilter, paymentFilter]);
+  
+  // Reset to page 1 when search term changes
+  useEffect(() => {
+    if (currentPage === 1) {
+      fetchOrders();
+    } else {
+      setCurrentPage(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm]);
 
   const statusColor = {
     pending: "bg-yellow-100 text-yellow-800 border-yellow-200",
@@ -431,16 +543,14 @@ function OrderPage() {
     { value: "refunded", label: "Буцаагдсан" },
   ];
 
+  // Client-side search filtering (status and payment filters are now server-side)
   const filteredOrders = orders.filter(order => {
-    const matchesSearch = 
+    if (!searchTerm) return true;
+    return (
       order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customer_phone?.includes(searchTerm);
-    
-    const matchesStatus = statusFilter === "all" || order.status === statusFilter;
-    const matchesPayment = paymentFilter === "all" || order.payment_status === paymentFilter;
-
-    return matchesSearch && matchesStatus && matchesPayment;
+      order.customer_phone?.includes(searchTerm)
+    );
   });
 
   const handleViewOrder = (order: Order) => {
@@ -451,6 +561,51 @@ function OrderPage() {
   const handleEditOrder = (order: Order) => {
     setSelectedOrder(order);
     setIsEditOpen(true);
+  };
+
+  const handleDeleteOrder = (order: Order) => {
+    setOrderToDelete(order);
+    setIsDeleteOpen(true);
+  };
+
+  const confirmDeleteOrder = async () => {
+    if (!orderToDelete) return;
+
+    try {
+      // First, find the order by order_number to get the actual ID
+      const findResponse = await fetch(`${API_URL}/number/${orderToDelete.id}`, {
+        method: 'GET',
+      });
+
+      if (!findResponse.ok) {
+        throw new Error('Failed to find order');
+      }
+
+      const orderData = await findResponse.json();
+      const actualOrderId = orderData.order?.id;
+
+      if (!actualOrderId) {
+        throw new Error('Order ID not found');
+      }
+
+      // Delete the order
+      const deleteResponse = await fetch(`${API_URL}/${actualOrderId}`, {
+        method: 'DELETE',
+      });
+
+      if (!deleteResponse.ok) {
+        const errorData = await deleteResponse.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to delete order');
+      }
+
+      // Refresh orders after deletion
+      await fetchOrders();
+      setIsDeleteOpen(false);
+      setOrderToDelete(null);
+    } catch (err) {
+      console.error('Error deleting order:', err);
+      setError(err instanceof Error ? err.message : 'Failed to delete order');
+    }
   };
 
   const handlePrintOrder = (order: Order) => {
@@ -661,7 +816,7 @@ function OrderPage() {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Захиалгын жагсаалт</h1>
         <div className="text-sm text-gray-500">
-          Нийт: {filteredOrders.length} захиалга
+          Нийт: {total} захиалга
         </div>
       </div>
 
@@ -679,107 +834,177 @@ function OrderPage() {
       )}
 
       {/* Filters */}
-      <div className="flex gap-4 items-center">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <Input
-            placeholder="Захиалгын дугаар, харилцагчийн нэр, утасны дугаараар хайх..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
+      <div className="space-y-4">
+        <div className="flex gap-4 items-center flex-wrap">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Захиалгын дугаар, харилцагчийн нэр, утасны дугаараар хайх..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="Төлөв" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Бүх төлөв</SelectItem>
+              {statusOptions.map(option => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.icon} {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Төлбөрийн төлөв" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Бүх төлбөрийн төлөв</SelectItem>
+              {paymentOptions.map(option => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Төлөв" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Бүх төлөв</SelectItem>
-            {statusOptions.map(option => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.icon} {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={paymentFilter} onValueChange={setPaymentFilter}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Төлбөрийн төлөв" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Бүх төлбөрийн төлөв</SelectItem>
-            {paymentOptions.map(option => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/* Date Filters */}
+        <div className="flex gap-4 items-center flex-wrap">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="start-date" className="text-sm whitespace-nowrap">Эхлэх огноо:</Label>
+            <Input
+              id="start-date"
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-40"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="end-date" className="text-sm whitespace-nowrap">Дуусах огноо:</Label>
+            <Input
+              id="end-date"
+              type="date"
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-40"
+            />
+          </div>
+          {(startDate || endDate) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setStartDate("");
+                setEndDate("");
+                setCurrentPage(1);
+              }}
+            >
+              Цэвэрлэх
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Orders List */}
-      <div className="grid grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 gap-2">
         {filteredOrders.map((order) => (
-          <Card key={order.id} className="p-6 shadow-sm border">
-            <div className="flex justify-between items-start mb-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-3">
-                  <p className="font-semibold text-lg">#{order.id}</p>
-                  <span className={`px-3 py-1 rounded-full text-sm border ${statusColor[order.status]}`}>
+          <Card key={order.id} className="p-3 shadow-sm border">
+            <div className="flex justify-between items-start mb-2">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-semibold text-base">#{order.id}</p>
+                  <span className={`px-2 py-0.5 rounded-full text-xs border ${statusColor[order.status]}`}>
                     {getStatusIcon(order.status)} {statusOptions.find(s => s.value === order.status)?.label}
                   </span>
-                  <span className={`px-3 py-1 rounded-full text-sm border ${paymentColor[order.payment_status]}`}>
+                  <span className={`px-2 py-0.5 rounded-full text-xs border ${paymentColor[order.payment_status]} flex items-center gap-1`}>
                     {paymentOptions.find(p => p.value === order.payment_status)?.label}
+                    {order.payment_status === "paid" && (
+                      <>
+                        {order.invoice_id ? (
+                          <span title="QPay төлбөр">
+                            <QrCode className="h-3 w-3" />
+                          </span>
+                        ) : (
+                          <span title="Админ төлбөр">
+                            <UserCircle className="h-3 w-3" />
+                          </span>
+                        )}
+                      </>
+                    )}
                   </span>
                 </div>
-                <p className="text-sm text-gray-600">Үүссэн: {order.created_at}</p>
+                <p className="text-xs text-gray-600">Үүссэн: {order.created_at}</p>
                 {order.customer_name && (
-                  <p className="text-sm">
+                  <p className="text-xs">
                     <span className="font-medium">Харилцагч:</span> {order.customer_name}
                     {order.customer_phone && ` (${order.customer_phone})`}
                   </p>
                 )}
                 {order.district && (
-                  <p className="text-sm text-gray-600">
+                  <p className="text-xs text-gray-600">
                     <span className="font-medium">Дүүрэг:</span> {order.district}
                     {order.khoroo && `, Хороо: ${order.khoroo}`}
                   </p>
                 )}
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-1">
                 <Button 
                   variant="outline" 
                   size="sm"
                   onClick={() => handleViewOrder(order)}
+                  className="h-7 px-2 text-xs"
                 >
-                  <Eye className="h-4 w-4 mr-1" />
+                  <Eye className="h-3 w-3 mr-1" />
                   Харах
                 </Button>
                 <Button 
                   variant="outline" 
                   size="sm"
                   onClick={() => handleEditOrder(order)}
+                  className="h-7 px-2 text-xs"
                 >
-                  <Edit className="h-4 w-4 mr-1" />
+                  <Edit className="h-3 w-3 mr-1" />
                   Засах
                 </Button>
                 <Button 
                   variant="outline" 
                   size="sm"
                   onClick={() => handlePrintOrder(order)}
+                  className="h-7 px-2 text-xs"
                 >
-                  <Printer className="h-4 w-4 mr-1" />
+                  <Printer className="h-3 w-3 mr-1" />
                   Хэвлэх
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleDeleteOrder(order)}
+                  className="h-7 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                >
+                  <Trash2 className="h-3 w-3 mr-1" />
+                  Устгах
                 </Button>
               </div>
             </div>
 
-            <div className="mt-4 border-t pt-4">
-              <p className="font-medium mb-2">Бараанууд:</p>
-              <ul className="space-y-1 text-sm">
+            <div className="mt-1 border-t pt-1">
+              <p className="font-medium text-sm">Бараанууд:</p>
+              <ul className="space-y-0.5 text-sm">
                 {order.items.map((item, i) => (
                   <li key={i} className="flex justify-between">
                     <span>{item.name} × {item.qty}ш</span>
@@ -789,18 +1014,18 @@ function OrderPage() {
               </ul>
             </div>
 
-            <div className="flex justify-between items-center mt-4 pt-4 border-t">
-              <div className="text-lg font-semibold">
+            <div className="flex justify-between items-center mt-1 pt-1 border-t">
+              <div className="text-base font-semibold">
                 Нийт: {order.total.toLocaleString()}₮
               </div>
               
               {/* Quick Actions */}
-              <div className="flex gap-2">
+              <div className="flex gap-1">
                 <Select 
                   value={order.status} 
                   onValueChange={(value: Order["status"]) => handleStatusChange(order.id, value)}
                 >
-                  <SelectTrigger className="w-40 h-8">
+                  <SelectTrigger className="w-36 h-7 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -816,7 +1041,7 @@ function OrderPage() {
                   value={order.payment_status} 
                   onValueChange={(value: Order["payment_status"]) => handlePaymentStatusChange(order.id, value)}
                 >
-                  <SelectTrigger className="w-40 h-8">
+                  <SelectTrigger className="w-36 h-7 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -832,12 +1057,93 @@ function OrderPage() {
           </Card>
         ))}
 
-        {filteredOrders.length === 0 && (
+        {filteredOrders.length === 0 && !loading && (
           <Card className="p-8 text-center">
             <p className="text-gray-500">Захиалга олдсонгүй</p>
           </Card>
         )}
       </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-4 border-t">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              Хуудасны хэмжээ:
+            </span>
+            <Select
+              value={pageSize.toString()}
+              onValueChange={(value) => {
+                setPageSize(parseInt(value));
+                setCurrentPage(1);
+              }}
+            >
+              <SelectTrigger className="w-20">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="20">20</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-sm text-muted-foreground ml-4">
+              {((currentPage - 1) * pageSize + 1)}-{Math.min(currentPage * pageSize, total)} / {total}
+            </span>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1 || loading}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Өмнөх
+            </Button>
+            
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={currentPage === pageNum ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentPage(pageNum)}
+                    disabled={loading}
+                    className="w-10"
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+            </div>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages || loading}
+            >
+              Дараах
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* View Order Dialog */}
       <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
@@ -860,9 +1166,45 @@ function OrderPage() {
                   <h4 className="font-semibold">Захиалгын мэдээлэл</h4>
                   <p>Үүссэн огноо: {selectedOrder.created_at}</p>
                   <p>Төлөв: {statusOptions.find(s => s.value === selectedOrder.status)?.label}</p>
-                  <p>Төлбөрийн төлөв: {paymentOptions.find(p => p.value === selectedOrder.payment_status)?.label}</p>
+                  <p className="flex items-center gap-2">
+                    Төлбөрийн төлөв: {paymentOptions.find(p => p.value === selectedOrder.payment_status)?.label}
+                    {selectedOrder.payment_status === "paid" && (
+                      <>
+                        {selectedOrder.invoice_id ? (
+                          <span title="QPay төлбөр" className="flex items-center">
+                            <QrCode className="h-4 w-4" />
+                          </span>
+                        ) : (
+                          <span title="Админ төлбөр" className="flex items-center">
+                            <UserCircle className="h-4 w-4" />
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </p>
                 </div>
               </div>
+
+              {/* Invoice Information */}
+              {(selectedOrder.invoice_name || selectedOrder.invoice_register || selectedOrder.invoice_email || selectedOrder.invoice_phone) && (
+                <div className="border-t pt-4">
+                  <h4 className="font-semibold mb-2">Нэхэмжлэх мэдээлэл</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    {selectedOrder.invoice_name && (
+                      <p><span className="font-medium">Байгууллагын нэр:</span> {selectedOrder.invoice_name}</p>
+                    )}
+                    {selectedOrder.invoice_register && (
+                      <p><span className="font-medium">Регистрийн дугаар:</span> {selectedOrder.invoice_register}</p>
+                    )}
+                    {selectedOrder.invoice_email && (
+                      <p><span className="font-medium">Цахим шуудан:</span> {selectedOrder.invoice_email}</p>
+                    )}
+                    {selectedOrder.invoice_phone && (
+                      <p><span className="font-medium">Утасны дугаар:</span> {selectedOrder.invoice_phone}</p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <h4 className="font-semibold mb-2">Захиалгын бараанууд</h4>
@@ -1064,6 +1406,57 @@ function OrderPage() {
                 </div>
               </div>
 
+              {/* Invoice Information */}
+              <div className="space-y-4">
+                <h4 className="font-semibold text-lg">Нэхэмжлэх мэдээлэл</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Байгууллагын нэр</Label>
+                    <Input
+                      value={selectedOrder.invoice_name || ''}
+                      onChange={(e) => 
+                        setSelectedOrder({...selectedOrder, invoice_name: e.target.value})
+                      }
+                      placeholder="Байгууллагын нэр"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Регистрийн дугаар</Label>
+                    <Input
+                      value={selectedOrder.invoice_register || ''}
+                      onChange={(e) => 
+                        setSelectedOrder({...selectedOrder, invoice_register: e.target.value})
+                      }
+                      placeholder="Регистрийн дугаар"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Цахим шуудан</Label>
+                    <Input
+                      type="email"
+                      value={selectedOrder.invoice_email || ''}
+                      onChange={(e) => 
+                        setSelectedOrder({...selectedOrder, invoice_email: e.target.value})
+                      }
+                      placeholder="email@example.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Утасны дугаар</Label>
+                    <Input
+                      type="tel"
+                      value={selectedOrder.invoice_phone || ''}
+                      onChange={(e) => 
+                        setSelectedOrder({...selectedOrder, invoice_phone: e.target.value})
+                      }
+                      placeholder="Утасны дугаар"
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* Notes */}
               <div className="space-y-2">
                 <Label>Тэмдэглэл</Label>
@@ -1090,6 +1483,48 @@ function OrderPage() {
                 }
               }
             }}>Хадгалах</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Захиалга устгах</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-gray-600">
+              Та захиалга <strong>#{orderToDelete?.id}</strong> устгахдаа итгэлтэй байна уу?
+            </p>
+            {orderToDelete && (
+              <div className="bg-gray-50 p-3 rounded-md">
+                <p className="text-sm">
+                  <strong>Харилцагч:</strong> {orderToDelete.customer_name || '-'}
+                </p>
+                <p className="text-sm">
+                  <strong>Нийт дүн:</strong> {orderToDelete.total.toLocaleString()}₮
+                </p>
+              </div>
+            )}
+            <p className="text-sm text-red-600 font-medium">
+              ⚠️ Энэ үйлдлийг буцаах боломжгүй!
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setIsDeleteOpen(false);
+              setOrderToDelete(null);
+            }}>
+              Цуцлах
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={confirmDeleteOrder}
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              Устгах
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

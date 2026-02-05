@@ -425,7 +425,13 @@ exports.findAllByUserId = (req, res) => {
   }
 
   Order.findAll({
-    where: { user_id: userId },
+    where: { 
+      user_id: userId,
+      [Op.or]: [
+        { isDeleted: false },
+        { isDeleted: { [Op.is]: null } }
+      ]
+    },
     include: [{ model: OrderItem, as: "items" }],
     order: [["created_at", "DESC"]],
     attributes: {
@@ -463,7 +469,11 @@ exports.getLastDeliveredOrder = (req, res) => {
   Order.findOne({
     where: { 
       user_id: userId,
-      order_status: 2 // 2 = Delivered
+      order_status: 2, // 2 = Delivered
+      [Op.or]: [
+        { isDeleted: false },
+        { isDeleted: { [Op.is]: null } }
+      ]
     },
     include: [{ model: OrderItem, as: "items" }],
     order: [["created_at", "DESC"]],
@@ -592,6 +602,15 @@ exports.update = (req, res) => {
         return null;
       }
 
+      // Check if order is deleted - allow update only if explicitly restoring (isDeleted = false)
+      if (order.isDeleted === true && req.body.isDeleted !== false) {
+        res.status(400).json({
+          success: false,
+          message: "Устгагдсан захиалгыг засах боломжгүй. Эхлээд сэргээх хэрэгтэй."
+        });
+        return null;
+      }
+
       const updateData = {
         updated_at: new Date()
       };
@@ -620,6 +639,17 @@ exports.update = (req, res) => {
       }
       if (req.body.khoroo !== undefined) {
         updateData.khoroo = req.body.khoroo;
+      }
+      if (req.body.isDeleted !== undefined) {
+        updateData.isDeleted = req.body.isDeleted;
+      }
+      if (req.body.invoiceData !== undefined) {
+        // invoiceData can be an object or null
+        if (req.body.invoiceData && typeof req.body.invoiceData === 'object') {
+          updateData.invoice_data = JSON.stringify(req.body.invoiceData);
+        } else {
+          updateData.invoice_data = null;
+        }
       }
 
       // Handle order items update if provided
@@ -804,55 +834,53 @@ exports.updatePaymentStatus = (req, res) => {
     });
 };
 
-// Delete a Order with the specified id in the request
+// Delete a Order with the specified id in the request (soft delete)
 exports.delete = (req, res) => {
   const id = req.params.id;
 
-  const transaction = db.sequelize.transaction().then(t => {
-    return OrderItem.destroy({
-      where: { order_id: id },
-      transaction: t
-    })
-      .then(() => {
-        return Order.destroy({
-          where: { id: id },
-          transaction: t
+  Order.findByPk(id)
+    .then(order => {
+      if (!order) {
+        res.status(404).json({
+          success: false,
+          message: `ID-тай захиалга олдсонгүй: ${id}`
         });
-      })
-      .then(num => {
-        if (num == 1) {
-          return t.commit().then(() => num);
-        } else {
-          return t.rollback().then(() => 0);
-        }
+        return;
+      }
+
+      // Soft delete: set isDeleted to true
+      return order.update({
+        isDeleted: true,
+        updated_at: new Date()
       });
-  }).then(num => {
-    if (num == 1) {
+    })
+    .then(() => {
       res.json({
         success: true,
         message: "Захиалга амжилттай устгагдлаа!"
       });
-    } else {
-      res.status(404).json({
+    })
+    .catch(err => {
+      console.error("Delete order error:", err);
+      res.status(500).json({
         success: false,
-        message: `ID-тай захиалга олдсонгүй: ${id}`
+        message: err.message || `ID-тай захиалга устгахад алдаа гарлаа: ${id}`
       });
-    }
-  }).catch(err => {
-    console.error("Delete order error:", err);
-    res.status(500).json({
-      success: false,
-      message: err.message || `ID-тай захиалга устгахад алдаа гарлаа: ${id}`
     });
-  });
 };
 
 // Find all Orders (admin)
 exports.findAll = (req, res) => {
-  const { page = 1, limit = 20, order_status, payment_status } = req.query;
+  const { page = 1, limit = 20, order_status, payment_status, start_date, end_date } = req.query;
   const offset = (page - 1) * limit;
 
-  const whereCondition = {};
+  const whereCondition = {
+    // Filter out soft-deleted orders
+    [Op.or]: [
+      { isDeleted: false },
+      { isDeleted: { [Op.is]: null } }
+    ]
+  };
 
   if (order_status !== undefined) {
     whereCondition.order_status = order_status;
@@ -860,6 +888,23 @@ exports.findAll = (req, res) => {
 
   if (payment_status !== undefined) {
     whereCondition.payment_status = payment_status;
+  }
+
+  // Add date filtering
+  if (start_date || end_date) {
+    whereCondition.created_at = {};
+    if (start_date) {
+      // Start of the day
+      const startDate = new Date(start_date);
+      startDate.setHours(0, 0, 0, 0);
+      whereCondition.created_at[Op.gte] = startDate;
+    }
+    if (end_date) {
+      // End of the day
+      const endDate = new Date(end_date);
+      endDate.setHours(23, 59, 59, 999);
+      whereCondition.created_at[Op.lte] = endDate;
+    }
   }
 
   Order.findAndCountAll({
