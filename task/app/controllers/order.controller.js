@@ -938,8 +938,8 @@ exports.createInvoiceWithChuchu = async (req, res) => {
       updateData.invoice_data = JSON.stringify(invoiceData);
     }
     
-    // Update order payment status to indicate invoice created
-    updateData.payment_status = 1; // Mark as paid for invoice orders
+    // Keep order as unpaid - only admin can change payment status to paid
+    // Do not update payment_status here - it should remain 0 (unpaid)
     
     await order.update(updateData);
 
