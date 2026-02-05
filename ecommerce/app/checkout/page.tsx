@@ -426,6 +426,8 @@ const CheckoutPageContent = () => {
         grandTotal: total,
         paymentMethod: paymentMethodMap[paymentMethod] || 0,
         shippingAddress: fullShippingAddress,
+        address: currentFormData.deliveryMethod === 'delivery' ? currentFormData.address || null : null, // Detailed address (e.g., "нарны хороолол 7р байр")
+        city: currentFormData.deliveryMethod === 'delivery' ? currentFormData.city || null : null,
         district: currentFormData.deliveryMethod === 'delivery' ? currentFormData.district || null : null,
         khoroo: currentFormData.deliveryMethod === 'delivery' ? currentFormData.khoroo || null : null,
         phoneNumber: currentFormData.phone,
@@ -858,6 +860,8 @@ const CheckoutPageContent = () => {
         grandTotal: subtotal + calculatedShipping,
         paymentMethod: 1,
         shippingAddress: fullShippingAddress,
+        address: currentFormData.deliveryMethod === 'delivery' ? currentFormData.address || null : null, // Detailed address (e.g., "нарны хороолол 7р байр")
+        city: currentFormData.deliveryMethod === 'delivery' ? currentFormData.city || null : null,
         district: currentFormData.deliveryMethod === 'delivery' ? currentFormData.district || null : null,
         khoroo: currentFormData.deliveryMethod === 'delivery' ? currentFormData.khoroo || null : null,
         phoneNumber: invoiceFormData.phone || currentFormData.phone,

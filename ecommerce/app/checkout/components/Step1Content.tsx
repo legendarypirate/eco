@@ -29,6 +29,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/app/components/ui/form';
+import GoogleAddressAutocomplete from './GoogleAddressAutocomplete';
 
 // Validation schema
 const formSchema = z.object({
@@ -450,10 +451,27 @@ const Step1Content = ({
                     <FormItem>
                       <FormLabel>Дэлгэрэнгүй хаяг *</FormLabel>
                       <FormControl>
-                        <div className="relative">
-                          <Home className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                          <Input {...field} placeholder="Байр, орц, давхар, тоот" className="pl-10" />
-                        </div>
+                        <GoogleAddressAutocomplete
+                          value={field.value || ''}
+                          onChange={(address, components) => {
+                            // Update address field
+                            field.onChange(address);
+                            
+                            // Update other fields if components are provided
+                            if (components) {
+                              if (components.city && !form.getValues('city')) {
+                                form.setValue('city', components.city);
+                              }
+                              if (components.district) {
+                                form.setValue('district', components.district);
+                              }
+                              if (components.khoroo) {
+                                form.setValue('khoroo', components.khoroo);
+                              }
+                            }
+                          }}
+                          placeholder="Хаяг оруулж захиалга эхлүүлэх. Жич: Та сайтар шалгаж зөв хаяг оруулна уу"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

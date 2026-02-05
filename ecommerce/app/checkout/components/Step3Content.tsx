@@ -101,7 +101,7 @@ const Step3Content = ({
               <div className="flex justify-between">
                 <span className="text-gray-600">Төлбөрийн арга:</span>
                 <span className="font-medium">
-                  {paymentMethod === 'qpay' ? 'QPay' : 
+                  {paymentMethod === 'qpay' ? 'Нэхэжмлэх' : 
                    paymentMethod === 'card' ? 'Карт' : 'Банкны шилжүүлэг'}
                 </span>
               </div>
