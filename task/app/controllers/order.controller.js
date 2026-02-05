@@ -1011,7 +1011,15 @@ exports.createInvoiceWithChuchu = async (req, res) => {
     }
     
     if (invoiceData) {
-      updateData.invoice_data = JSON.stringify(invoiceData);
+      // Ensure invoiceNumber and invoiceDate are included in invoice_data
+      const enhancedInvoiceData = {
+        ...invoiceData,
+        invoiceNumber: invoiceData.invoiceNumber || order.order_number || `INV-${order.id}`,
+        invoiceDate: invoiceData.invoiceDate || invoiceData.invoice_date || new Date().toISOString().split('T')[0],
+        customerRegister: invoiceData.customerRegister || invoiceData.customer_register || invoiceData.register || null,
+        customerEmail: invoiceData.customerEmail || invoiceData.customer_email || invoiceData.email || null,
+      };
+      updateData.invoice_data = JSON.stringify(enhancedInvoiceData);
     }
     
     // Keep order as unpaid - only admin can change payment status to paid
@@ -1030,12 +1038,37 @@ exports.createInvoiceWithChuchu = async (req, res) => {
 
     // Call e-chuchu API when invoice is created (with address and phone from request)
     if (updatedOrder) {
+      // Parse invoice_data to extract invoice fields
+      let invoiceNumber = null;
+      let invoiceDate = null;
+      let customerRegister = null;
+      let customerEmail = null;
+      
+      if (updatedOrder.invoice_data) {
+        try {
+          const parsedInvoiceData = typeof updatedOrder.invoice_data === 'string' 
+            ? JSON.parse(updatedOrder.invoice_data) 
+            : updatedOrder.invoice_data;
+          
+          invoiceNumber = parsedInvoiceData.invoiceNumber || parsedInvoiceData.invoice_number || updatedOrder.order_number || null;
+          invoiceDate = parsedInvoiceData.invoiceDate || parsedInvoiceData.invoice_date || null;
+          customerRegister = parsedInvoiceData.customerRegister || parsedInvoiceData.customer_register || parsedInvoiceData.register || null;
+          customerEmail = parsedInvoiceData.customerEmail || parsedInvoiceData.customer_email || parsedInvoiceData.email || null;
+        } catch (e) {
+          console.warn('Error parsing invoice_data in createInvoiceWithChuchu:', e);
+        }
+      }
+      
       const chuchuOptions = {
         address: address || updatedOrder.shipping_address,
         district: district !== undefined ? district : updatedOrder.district,
         khoroo: khoroo !== undefined ? khoroo : updatedOrder.khoroo,
         phone: phone || updatedOrder.phone_number,
-        comment: khoroo || ""
+        comment: khoroo || "",
+        invoice_number: invoiceNumber,
+        invoice_date: invoiceDate,
+        customer_register: customerRegister,
+        customer_email: customerEmail
       };
       
       callChuchuAPI(updatedOrder, chuchuOptions).then(result => {
@@ -1268,12 +1301,37 @@ exports.generateInvoicePDF = async (req, res) => {
     // Call e-chuchu API when PDF is downloaded (for all orders including pickup)
     // Call asynchronously so it doesn't block PDF generation
     // Use order data which should already have address and phone from invoice creation
+    // Extract invoice fields from invoice_data
+    let invoiceNumber = null;
+    let invoiceDate = null;
+    let customerRegister = null;
+    let customerEmail = null;
+    
+    if (order.invoice_data) {
+      try {
+        const invoiceData = typeof order.invoice_data === 'string' 
+          ? JSON.parse(order.invoice_data) 
+          : order.invoice_data;
+        
+        invoiceNumber = invoiceData.invoiceNumber || invoiceData.invoice_number || order.order_number || null;
+        invoiceDate = invoiceData.invoiceDate || invoiceData.invoice_date || null;
+        customerRegister = invoiceData.customerRegister || invoiceData.customer_register || invoiceData.register || null;
+        customerEmail = invoiceData.customerEmail || invoiceData.customer_email || invoiceData.email || null;
+      } catch (e) {
+        console.warn('Error parsing invoice_data in generateInvoicePDF:', e);
+      }
+    }
+    
     callChuchuAPI(order, {
       address: order.shipping_address,
       district: order.district,
       khoroo: order.khoroo,
       phone: order.phone_number,
-      comment: ""
+      comment: "",
+      invoice_number: invoiceNumber,
+      invoice_date: invoiceDate,
+      customer_register: customerRegister,
+      customer_email: customerEmail
     }).then(result => {
       if (result.success) {
         console.log('e-chuchu record created successfully when PDF was downloaded for order:', order.order_number);

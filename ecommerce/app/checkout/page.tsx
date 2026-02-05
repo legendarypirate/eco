@@ -845,6 +845,10 @@ const CheckoutPageContent = () => {
         sku: item.product.sku || null,
       }));
 
+      // Generate temporary invoice number (will be replaced with actual order_number after order creation)
+      const tempInvoiceNumber = `TEMP-${Date.now()}`;
+      const tempInvoiceDate = new Date().toISOString().split('T')[0];
+
       const orderData = {
         userId: isAuthenticated ? user?.id : `guest_${Date.now()}`,
         items: orderItems,
@@ -866,6 +870,8 @@ const CheckoutPageContent = () => {
           register: invoiceFormData.register,
           email: invoiceFormData.email,
           phone: invoiceFormData.phone,
+          invoiceNumber: tempInvoiceNumber, // Will be updated with actual order_number
+          invoiceDate: tempInvoiceDate,
         },
       };
 
@@ -975,6 +981,15 @@ const CheckoutPageContent = () => {
         console.log('[Invoice PDF] Skipping address save - user not authenticated');
       }
 
+      // Prepare invoice data with invoiceNumber and invoiceDate
+      const invoiceDateStr = new Date().toISOString().split('T')[0];
+      
+      const enhancedInvoiceData = {
+        ...invoiceFormData,
+        invoiceNumber: createdOrder.order_number || `INV-${createdOrder.id}`,
+        invoiceDate: invoiceDateStr,
+      };
+
       const invoiceResponse = await fetch(`${API_URL}/order/${createdOrder.id}/invoice/chuchu`, {
         method: 'POST',
         headers: {
@@ -986,7 +1001,7 @@ const CheckoutPageContent = () => {
           district: currentFormData.deliveryMethod === 'delivery' ? currentFormData.district || undefined : undefined,
           khoroo: currentFormData.deliveryMethod === 'delivery' ? currentFormData.khoroo || undefined : undefined,
           phone: invoiceFormData.phone || currentFormData.phone,
-          invoiceData: invoiceFormData,
+          invoiceData: enhancedInvoiceData,
         }),
       });
 
