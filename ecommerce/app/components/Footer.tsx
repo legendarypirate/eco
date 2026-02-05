@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Script from 'next/script';
 
 interface SocialLink {
   name: string;
@@ -98,6 +99,40 @@ const Footer = () => {
     };
 
     fetchFooter();
+  }, []);
+
+  // Initialize chatbot when script loads
+  useEffect(() => {
+    const initChatbot = () => {
+      if (typeof window !== 'undefined' && (window as any).ktt10) {
+        (window as any).ktt10.setup({
+          id: "KT6JpkeiKo4dJU",
+          accountId: "1800667",
+          color: "#006dff"
+        });
+      }
+    };
+
+    // Try to initialize immediately if script is already loaded
+    initChatbot();
+
+    // Also listen for script load event
+    const checkInterval = setInterval(() => {
+      if (typeof window !== 'undefined' && (window as any).ktt10) {
+        initChatbot();
+        clearInterval(checkInterval);
+      }
+    }, 100);
+
+    // Cleanup interval after 10 seconds
+    const timeout = setTimeout(() => {
+      clearInterval(checkInterval);
+    }, 10000);
+
+    return () => {
+      clearInterval(checkInterval);
+      clearTimeout(timeout);
+    };
   }, []);
 
   if (loading || !footerData) {
@@ -265,6 +300,21 @@ const Footer = () => {
           </div>
         </div>
       </div>
+      
+      {/* Chatbot Scripts */}
+      <Script
+        src="https://chatbot.mongolbot.net/webchat/plugin.js?v=6"
+        strategy="lazyOnload"
+        onLoad={() => {
+          if (typeof window !== 'undefined' && (window as any).ktt10) {
+            (window as any).ktt10.setup({
+              id: "KT6JpkeiKo4dJU",
+              accountId: "1800667",
+              color: "#006dff"
+            });
+          }
+        }}
+      />
     </footer>
   );
 };

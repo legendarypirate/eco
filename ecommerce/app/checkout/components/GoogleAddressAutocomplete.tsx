@@ -463,7 +463,7 @@ const GoogleAddressAutocomplete = ({
       {showSuggestions && suggestions.length > 0 && (
         <div 
           ref={suggestionsRef}
-          className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto"
+          className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-96 overflow-auto"
           onMouseDown={(e) => e.preventDefault()} // Prevent input blur
         >
           {suggestions.map((suggestion: any, index: number) => (

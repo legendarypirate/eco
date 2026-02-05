@@ -451,7 +451,7 @@ async function getQPayToken() {
 // Create QPay invoice for checkout order
 exports.createCheckoutInvoice = async (req, res) => {
   try {
-    const { orderId, amount, description } = req.body;
+    const { orderId, amount, description, invoiceData: requestInvoiceData } = req.body;
 
     if (!orderId || !amount) {
       return res.status(400).json({ 
@@ -471,6 +471,39 @@ exports.createCheckoutInvoice = async (req, res) => {
         success: false,
         error: 'Order not found' 
       });
+    }
+
+    // Update order with invoice data if provided
+    if (requestInvoiceData) {
+      try {
+        // Get existing invoice_data if any
+        let existingInvoiceData = null;
+        if (order.invoice_data) {
+          try {
+            existingInvoiceData = typeof order.invoice_data === 'string' 
+              ? JSON.parse(order.invoice_data) 
+              : order.invoice_data;
+          } catch (e) {
+            console.warn('Error parsing existing invoice_data:', e);
+          }
+        }
+
+        // Merge invoice data
+        const updatedInvoiceData = {
+          ...existingInvoiceData,
+          invoiceType: requestInvoiceData.invoiceType || null,
+          register: requestInvoiceData.register || null,
+          orgName: requestInvoiceData.orgName || null,
+        };
+
+        await order.update({
+          invoice_data: JSON.stringify(updatedInvoiceData),
+          updated_at: new Date()
+        });
+      } catch (updateError) {
+        console.error('Error updating order with invoice data:', updateError);
+        // Continue with invoice creation even if update fails
+      }
     }
 
     // Get QPay token

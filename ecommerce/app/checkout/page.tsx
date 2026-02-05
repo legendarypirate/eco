@@ -76,6 +76,9 @@ const CheckoutPageContent = () => {
     khoroo: '',
     note: '',
     deliveryMethod: 'delivery',
+    invoiceType: '',
+    invoiceRegister: '',
+    invoiceOrgName: '',
   });
 
   useEffect(() => {
@@ -286,6 +289,23 @@ const CheckoutPageContent = () => {
     setInvoiceFormData(prev => ({ ...prev, [name]: value }));
   }, []);
 
+  const handleInvoiceTypeChange = useCallback((invoiceType: string) => {
+    setFormData(prev => ({
+      ...prev,
+      invoiceType,
+      // Clear invoice data when type changes
+      invoiceRegister: '',
+      invoiceOrgName: '',
+    }));
+  }, []);
+
+  const handleInvoiceDataChange = useCallback((field: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value,
+    }));
+  }, []);
+
   // Fixed Keydown handler - prevents input stuck issue
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     // Only handle Enter key
@@ -336,6 +356,18 @@ const CheckoutPageContent = () => {
     
     if (formData.deliveryMethod === 'delivery') {
       requiredFields.push('address', 'city');
+    }
+    
+    // Validate invoice data if invoice type is selected
+    if (formData.invoiceType) {
+      if (!formData.invoiceRegister || formData.invoiceRegister.trim() === '') {
+        alert('Регистрийн дугаар оруулна уу.');
+        return false;
+      }
+      if (formData.invoiceType === 'organization' && (!formData.invoiceOrgName || formData.invoiceOrgName.trim() === '')) {
+        alert('Байгууллагын нэр оруулна уу.');
+        return false;
+      }
     }
     
     for (const field of requiredFields) {
@@ -417,6 +449,16 @@ const CheckoutPageContent = () => {
         sku: item.product.sku || null,
       }));
 
+      // Prepare invoice data if invoice type is selected
+      let invoiceData = null;
+      if (currentFormData.invoiceType && (currentFormData.invoiceType === 'individual' || currentFormData.invoiceType === 'organization' || currentFormData.invoiceType === 'taxpayer')) {
+        invoiceData = {
+          invoiceType: currentFormData.invoiceType,
+          register: currentFormData.invoiceRegister || null,
+          orgName: currentFormData.invoiceType === 'organization' ? currentFormData.invoiceOrgName || null : null,
+        };
+      }
+
       const orderData = {
         userId: isAuthenticated ? user?.id : `guest_${Date.now()}`,
         items: orderItems,
@@ -435,6 +477,7 @@ const CheckoutPageContent = () => {
         notes: currentFormData.note || null,
         couponId: appliedCoupon?.coupon_id || null,
         couponDiscount: appliedCoupon?.discount || 0,
+        invoiceData: invoiceData,
       };
 
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
@@ -483,6 +526,16 @@ const CheckoutPageContent = () => {
       // Delivery (хүргэлтээр): amount = subtotal + 5000 (or subtotal if subtotal > 120000)
       const qpayAmount = total;
 
+      // Prepare invoice data for QPay if invoice type is selected
+      let qpayInvoiceData = null;
+      if (currentFormData.invoiceType && (currentFormData.invoiceType === 'individual' || currentFormData.invoiceType === 'organization' || currentFormData.invoiceType === 'taxpayer')) {
+        qpayInvoiceData = {
+          invoiceType: currentFormData.invoiceType,
+          register: currentFormData.invoiceRegister || null,
+          orgName: currentFormData.invoiceType === 'organization' ? currentFormData.invoiceOrgName || null : null,
+        };
+      }
+
       const invoiceResponse = await fetch(`${API_URL}/qpay/checkout/invoice`, {
         method: 'POST',
         headers: {
@@ -492,7 +545,8 @@ const CheckoutPageContent = () => {
         body: JSON.stringify({
           orderId: createdOrder.id,
           amount: qpayAmount,
-          description: `Tsaas.mn - ${createdOrder.order_number}`
+          description: `Tsaas.mn - ${createdOrder.order_number}`,
+          invoiceData: qpayInvoiceData,
         }),
       });
 
@@ -583,6 +637,18 @@ const CheckoutPageContent = () => {
     
     if (currentFormData.deliveryMethod === 'delivery') {
       requiredFields.push('address', 'city');
+    }
+    
+    // Validate invoice data if invoice type is selected
+    if (currentFormData.invoiceType) {
+      if (!currentFormData.invoiceRegister || currentFormData.invoiceRegister.trim() === '') {
+        alert('Регистрийн дугаар оруулна уу.');
+        return;
+      }
+      if (currentFormData.invoiceType === 'organization' && (!currentFormData.invoiceOrgName || currentFormData.invoiceOrgName.trim() === '')) {
+        alert('Байгууллагын нэр оруулна уу.');
+        return;
+      }
     }
     
     for (const field of requiredFields) {
@@ -1158,6 +1224,9 @@ const CheckoutPageContent = () => {
           couponDiscount={storedOrderTotals?.couponDiscount ?? couponDiscount}
           appliedCoupon={appliedCoupon}
           formatPrice={formatPrice}
+          onInvoiceTypeChange={handleInvoiceTypeChange}
+          onInvoiceDataChange={handleInvoiceDataChange}
+          step={step}
         />
         
         <div className="lg:col-span-2 order-1 lg:order-2">

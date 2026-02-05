@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from 'react';
+import { useMemo, memo, useCallback } from 'react';
 import { Package, Shield, Truck, Clock } from 'lucide-react';
 
 interface OrderSummaryProps {
@@ -12,6 +12,9 @@ interface OrderSummaryProps {
   couponDiscount?: number;
   appliedCoupon?: {code: string, discount: number} | null;
   formatPrice: (price: number) => string;
+  onInvoiceTypeChange?: (invoiceType: string) => void;
+  onInvoiceDataChange?: (field: string, value: string) => void;
+  step?: number;
 }
 
 const OrderSummary = ({
@@ -22,7 +25,10 @@ const OrderSummary = ({
   total,
   couponDiscount = 0,
   appliedCoupon = null,
-  formatPrice
+  formatPrice,
+  onInvoiceTypeChange,
+  onInvoiceDataChange,
+  step = 1
 }: OrderSummaryProps) => {
   // Calculate subtotal from cartItems (excluding gift items)
   // Always calculate from cartItems when available, as it's the source of truth
@@ -52,6 +58,21 @@ const OrderSummary = ({
 
   // Use calculated subtotal
   const displaySubtotal = calculatedSubtotal;
+
+  // Memoize invoice handlers to prevent unnecessary re-renders
+  const handleInvoiceTypeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    onInvoiceTypeChange?.(e.target.value);
+  }, [onInvoiceTypeChange]);
+
+  const handleInvoiceDataChange = useCallback((field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    onInvoiceDataChange?.(field, e.target.value);
+  }, [onInvoiceDataChange]);
+
+  const handleInvoiceFormSubmit = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    return false;
+  }, []);
   return (
     <div className="lg:col-span-1 order-2 lg:order-1">
       <div className="bg-white rounded-lg border border-gray-200 p-6 sticky top-6">
@@ -117,6 +138,102 @@ const OrderSummary = ({
           </div>
         </div>
         
+        {/* Invoice Type Selection - Only show in Step 1 */}
+        {step === 1 && (
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4">Ибаримт</h3>
+            <form onSubmit={handleInvoiceFormSubmit} onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const target = e.target as HTMLElement;
+                // Allow Enter on radio buttons and textareas
+                if (target instanceof HTMLInputElement && target.type === 'radio') {
+                  return; // Allow default behavior for radio buttons
+                }
+                if (target instanceof HTMLTextAreaElement) {
+                  return; // Allow default behavior for textareas
+                }
+                // Prevent form submission for all other inputs
+                e.preventDefault();
+                e.stopPropagation();
+              }
+            }}>
+              <div className="space-y-3">
+                <label className="flex items-start gap-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                  <input
+                    type="radio"
+                    name="invoiceType"
+                    value="individual"
+                    checked={formData.invoiceType === 'individual'}
+                    onChange={handleInvoiceTypeChange}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-sm">Хувь хүн</div>
+                  </div>
+                </label>
+                <label className="flex items-start gap-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                  <input
+                    type="radio"
+                    name="invoiceType"
+                    value="organization"
+                    checked={formData.invoiceType === 'organization'}
+                    onChange={handleInvoiceTypeChange}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-sm">Байгууллага</div>
+                  </div>
+                </label>
+                <label className="flex items-start gap-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                  <input
+                    type="radio"
+                    name="invoiceType"
+                    value="taxpayer"
+                    checked={formData.invoiceType === 'taxpayer'}
+                    onChange={handleInvoiceTypeChange}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-sm">Татвар төлөгч иргэн</div>
+                  </div>
+                </label>
+              </div>
+              
+              {/* Invoice Data Fields */}
+              {(formData.invoiceType === 'individual' || formData.invoiceType === 'organization' || formData.invoiceType === 'taxpayer') && (
+                <div className="mt-4 space-y-3">
+                  {formData.invoiceType === 'organization' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Байгууллагын нэр *
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.invoiceOrgName || ''}
+                        onChange={handleInvoiceDataChange('invoiceOrgName')}
+                        placeholder="Байгууллагын нэр"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Регистрийн дугаар *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.invoiceRegister || ''}
+                      onChange={handleInvoiceDataChange('invoiceRegister')}
+                      placeholder="Регистрийн дугаар"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    />
+                  </div>
+                </div>
+              )}
+            </form>
+          </div>
+        )}
+        
         <div className="mt-6 pt-6 border-t border-gray-200 space-y-3">
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <Shield className="w-4 h-4" />
@@ -136,5 +253,5 @@ const OrderSummary = ({
   );
 };
 
-export default OrderSummary;
+export default memo(OrderSummary);
 
