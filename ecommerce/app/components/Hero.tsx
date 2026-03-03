@@ -21,7 +21,7 @@ const Hero = () => {
       try {
         setLoading(true);
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-        const response = await fetch(`${API_URL}/api/banner/published`);
+        const response = await fetch(`${API_URL}/banner/published`);
         
         // Handle 404 or other errors gracefully - use default banners
         if (!response.ok) {
