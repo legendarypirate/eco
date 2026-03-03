@@ -65,6 +65,9 @@ const Header = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
 
+  // Site/logo data (same as footer)
+  const [siteData, setSiteData] = useState<{ companyName: string; companySuffix?: string; logoUrl: string } | null>(null);
+
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -92,6 +95,29 @@ const Header = () => {
     
     return `${baseUrl}/assets/category/${imagePath}`;
   };
+
+  // Fetch site/footer data for logo (same as Footer)
+  useEffect(() => {
+    const fetchSiteData = async () => {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+        const response = await fetch(`${API_URL}/footer`);
+        if (response.ok) {
+          const data = await response.json();
+          setSiteData({
+            companyName: data.companyName ?? 'Tsaas.mn',
+            companySuffix: data.companySuffix,
+            logoUrl: data.logoUrl ?? '/logotsas.png',
+          });
+        } else {
+          setSiteData({ companyName: 'Tsaas.mn', logoUrl: '/logotsas.png' });
+        }
+      } catch {
+        setSiteData({ companyName: 'Tsaas.mn', logoUrl: '/logotsas.png' });
+      }
+    };
+    fetchSiteData();
+  }, []);
 
   // Fetch categories from API
   useEffect(() => {
@@ -360,19 +386,26 @@ const Header = () => {
         <div className="border-b border-gray-100">
           <div className="container mx-auto px-4">
             <div className="flex items-center justify-between h-14">
-              {/* Logo */}
+              {/* Logo - same data as Footer */}
               <div className="flex items-center space-x-3">
-                <button 
+                <button
                   onClick={() => router.push('/')}
                   className="flex items-center space-x-3 hover:opacity-80 transition-opacity"
                 >
-                  <img 
-                    src="/logotsas.png" 
-                    alt="Tsaas.mn Logo" 
-                    className="w-8 h-8 rounded-lg object-cover shadow-sm"
+                  <img
+                    src={siteData?.logoUrl || '/logotsas.png'}
+                    alt={`${siteData?.companyName ?? 'Tsaas.mn'} Logo`}
+                    width={40}
+                    height={40}
+                    className="rounded-lg object-cover shadow-sm"
                   />
-                  <div className="text-base font-bold text-gray-900">
-                    Tsaas.mn
+                  <div>
+                    <span className="text-base font-bold text-gray-900 block">
+                      {siteData?.companyName ?? 'Tsaas.mn'}
+                    </span>
+                    {siteData?.companySuffix && (
+                      <span className="text-gray-500 text-xs block">{siteData.companySuffix}</span>
+                    )}
                   </div>
                 </button>
               </div>
