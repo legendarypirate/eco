@@ -4,10 +4,11 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 
 interface Banner {
-  id: string;
+  id: string | number;
   image: string;
   text?: string;
   link?: string;
+  order?: number;
 }
 
 const Hero = () => {

@@ -1,5 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Allow external images (e.g. Cloudinary banners)
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'res.cloudinary.com',
+        pathname: '/**',
+      },
+    ],
+  },
   // Ensure CSS is properly processed
   experimental: {
     optimizePackageImports: ['lucide-react'],
