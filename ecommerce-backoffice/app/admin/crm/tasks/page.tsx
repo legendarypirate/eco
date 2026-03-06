@@ -17,6 +17,8 @@ const CUSTOMERS_API = `${API_BASE}/api/crm/customers`;
 const DEALS_API = `${API_BASE}/api/crm/deals`;
 const TASKS_API = `${API_BASE}/api/crm/tasks`;
 
+const SELECT_NONE = "__none__";
+
 interface Task {
   id: number;
   customer_id: number | null;
@@ -74,8 +76,8 @@ export default function CRMTasksPage() {
         method: editing ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          customer_id: formData.customer_id ? parseInt(formData.customer_id) : null,
-          deal_id: formData.deal_id ? parseInt(formData.deal_id) : null,
+          customer_id: (formData.customer_id && formData.customer_id !== SELECT_NONE) ? parseInt(formData.customer_id) : null,
+          deal_id: (formData.deal_id && formData.deal_id !== SELECT_NONE) ? parseInt(formData.deal_id) : null,
           title: formData.title.trim(),
           description: formData.description.trim() || null,
           due_date: formData.due_date || null,
@@ -131,10 +133,10 @@ export default function CRMTasksPage() {
         <CardHeader>
           <div className="flex flex-wrap gap-2 items-center justify-between">
             <CardTitle>Жагсаалт ({data.total})</CardTitle>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select value={statusFilter || SELECT_NONE} onValueChange={(v) => setStatusFilter(v === SELECT_NONE ? "" : v)}>
               <SelectTrigger className="w-[140px]"><SelectValue placeholder="Төлөв" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Бүгд</SelectItem>
+                <SelectItem value={SELECT_NONE}>Бүгд</SelectItem>
                 <SelectItem value="pending">Хүлээгдэж буй</SelectItem>
                 <SelectItem value="completed">Дууссан</SelectItem>
               </SelectContent>
@@ -184,15 +186,15 @@ export default function CRMTasksPage() {
             <div><Label>Гарчиг *</Label><Input value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} /></div>
             <div><Label>Тайлбар</Label><Textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={2} /></div>
             <div><Label>Харилцагч</Label>
-              <Select value={formData.customer_id} onValueChange={(v) => setFormData({ ...formData, customer_id: v })}>
+              <Select value={formData.customer_id || SELECT_NONE} onValueChange={(v) => setFormData({ ...formData, customer_id: v === SELECT_NONE ? "" : v })}>
                 <SelectTrigger><SelectValue placeholder="Сонгох" /></SelectTrigger>
-                <SelectContent><SelectItem value="">-</SelectItem>{customers.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
+                <SelectContent><SelectItem value={SELECT_NONE}>-</SelectItem>{customers.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div><Label>Гүйлгээ</Label>
-              <Select value={formData.deal_id} onValueChange={(v) => setFormData({ ...formData, deal_id: v })}>
+              <Select value={formData.deal_id || SELECT_NONE} onValueChange={(v) => setFormData({ ...formData, deal_id: v === SELECT_NONE ? "" : v })}>
                 <SelectTrigger><SelectValue placeholder="Сонгох" /></SelectTrigger>
-                <SelectContent><SelectItem value="">-</SelectItem>{deals.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.deal_name}</SelectItem>)}</SelectContent>
+                <SelectContent><SelectItem value={SELECT_NONE}>-</SelectItem>{deals.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.deal_name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div><Label>Дуусах огноо</Label><Input type="date" value={formData.due_date} onChange={(e) => setFormData({ ...formData, due_date: e.target.value })} /></div>

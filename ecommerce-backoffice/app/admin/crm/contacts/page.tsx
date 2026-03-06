@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 const CUSTOMERS_API = `${API_BASE}/api/crm/customers`;
 const CONTACTS_API = `${API_BASE}/api/crm/contacts`;
+const SELECT_NONE = "__none__";
 
 interface Contact {
   id: number;
@@ -147,12 +148,12 @@ export default function CRMContactsPage() {
         <CardHeader>
           <div className="flex flex-wrap gap-2 items-center justify-between">
             <CardTitle>Жагсаалт ({data.total})</CardTitle>
-            <Select value={customerFilter} onValueChange={setCustomerFilter}>
+            <Select value={customerFilter || SELECT_NONE} onValueChange={(v) => setCustomerFilter(v === SELECT_NONE ? "" : v)}>
               <SelectTrigger className="w-[200px]">
                 <SelectValue placeholder="Харилцагчаар шүүх" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Бүгд</SelectItem>
+                <SelectItem value={SELECT_NONE}>Бүгд</SelectItem>
                 {customers.map((c) => (
                   <SelectItem key={c.id} value={String(c.id)}>{c.name} {c.company_name ? `(${c.company_name})` : ""}</SelectItem>
                 ))}

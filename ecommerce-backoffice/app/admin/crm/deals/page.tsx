@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 const CUSTOMERS_API = `${API_BASE}/api/crm/customers`;
 const DEALS_API = `${API_BASE}/api/crm/deals`;
+const SELECT_NONE = "__none__";
 
 interface Deal {
   id: number;
@@ -122,19 +123,19 @@ export default function CRMDealsPage() {
           <div className="flex flex-wrap gap-2 items-center justify-between">
             <CardTitle>Жагсаалт ({data.total})</CardTitle>
             <div className="flex gap-2">
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select value={statusFilter || SELECT_NONE} onValueChange={(v) => setStatusFilter(v === SELECT_NONE ? "" : v)}>
                 <SelectTrigger className="w-[140px]"><SelectValue placeholder="Төлөв" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Бүгд</SelectItem>
+                  <SelectItem value={SELECT_NONE}>Бүгд</SelectItem>
                   <SelectItem value="open">Нээлттэй</SelectItem>
                   <SelectItem value="won">Хожсон</SelectItem>
                   <SelectItem value="lost">Хожигдсон</SelectItem>
                 </SelectContent>
               </Select>
-              <Select value={customerFilter} onValueChange={setCustomerFilter}>
+              <Select value={customerFilter || SELECT_NONE} onValueChange={(v) => setCustomerFilter(v === SELECT_NONE ? "" : v)}>
                 <SelectTrigger className="w-[180px]"><SelectValue placeholder="Харилцагч" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Бүгд</SelectItem>
+                  <SelectItem value={SELECT_NONE}>Бүгд</SelectItem>
                   {customers.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>

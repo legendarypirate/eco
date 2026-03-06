@@ -14,6 +14,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 const CUSTOMERS_API = `${API_BASE}/api/crm/customers`;
 const DEALS_API = `${API_BASE}/api/crm/deals`;
 const NOTES_API = `${API_BASE}/api/crm/notes`;
+const SELECT_NONE = "__none__";
 
 interface Note {
   id: number;
@@ -124,13 +125,13 @@ export default function CRMNotesPage() {
           <div className="flex flex-wrap gap-2 items-center justify-between">
             <CardTitle>Жагсаалт ({data.total})</CardTitle>
             <div className="flex gap-2">
-              <Select value={customerFilter} onValueChange={setCustomerFilter}>
+              <Select value={customerFilter || SELECT_NONE} onValueChange={(v) => setCustomerFilter(v === SELECT_NONE ? "" : v)}>
                 <SelectTrigger className="w-[160px]"><SelectValue placeholder="Харилцагч" /></SelectTrigger>
-                <SelectContent><SelectItem value="">Бүгд</SelectItem>{customers.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
+                <SelectContent><SelectItem value={SELECT_NONE}>Бүгд</SelectItem>{customers.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
               </Select>
-              <Select value={dealFilter} onValueChange={setDealFilter}>
+              <Select value={dealFilter || SELECT_NONE} onValueChange={(v) => setDealFilter(v === SELECT_NONE ? "" : v)}>
                 <SelectTrigger className="w-[160px]"><SelectValue placeholder="Гүйлгээ" /></SelectTrigger>
-                <SelectContent><SelectItem value="">Бүгд</SelectItem>{deals.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.deal_name}</SelectItem>)}</SelectContent>
+                <SelectContent><SelectItem value={SELECT_NONE}>Бүгд</SelectItem>{deals.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.deal_name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
           </div>
@@ -175,15 +176,15 @@ export default function CRMNotesPage() {
           <div className="space-y-4 py-4">
             <div><Label>Тэмдэглэл *</Label><Textarea value={formData.note_text} onChange={(e) => setFormData({ ...formData, note_text: e.target.value })} rows={4} /></div>
             <div><Label>Харилцагч</Label>
-              <Select value={formData.customer_id} onValueChange={(v) => setFormData({ ...formData, customer_id: v })}>
+              <Select value={formData.customer_id || SELECT_NONE} onValueChange={(v) => setFormData({ ...formData, customer_id: v === SELECT_NONE ? "" : v })}>
                 <SelectTrigger><SelectValue placeholder="Сонгох" /></SelectTrigger>
-                <SelectContent><SelectItem value="">-</SelectItem>{customers.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
+                <SelectContent><SelectItem value={SELECT_NONE}>-</SelectItem>{customers.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div><Label>Гүйлгээ</Label>
-              <Select value={formData.deal_id} onValueChange={(v) => setFormData({ ...formData, deal_id: v })}>
+              <Select value={formData.deal_id || SELECT_NONE} onValueChange={(v) => setFormData({ ...formData, deal_id: v === SELECT_NONE ? "" : v })}>
                 <SelectTrigger><SelectValue placeholder="Сонгох" /></SelectTrigger>
-                <SelectContent><SelectItem value="">-</SelectItem>{deals.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.deal_name}</SelectItem>)}</SelectContent>
+                <SelectContent><SelectItem value={SELECT_NONE}>-</SelectItem>{deals.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.deal_name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
           </div>
