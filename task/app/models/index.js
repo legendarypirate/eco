@@ -47,6 +47,17 @@ db.call_sales_activities = require("./call_sales_activity.model.js")(sequelize, 
 db.gift_settings = require("./gift_setting.model.js")(sequelize, Sequelize);
 db.partners = require("./partner.model.js")(sequelize, Sequelize);
 
+// CRM models
+db.customers = require("./customer.model.js")(sequelize, Sequelize);
+db.contacts = require("./contact.model.js")(sequelize, Sequelize);
+db.deals = require("./deal.model.js")(sequelize, Sequelize);
+db.tasksCrm = require("./taskCrm.model.js")(sequelize, Sequelize);
+db.notesCrm = require("./noteCrm.model.js")(sequelize, Sequelize);
+db.smsMessages = require("./smsMessage.model.js")(sequelize, Sequelize);
+db.emailsCrm = require("./emailCrm.model.js")(sequelize, Sequelize);
+db.invoicesCrm = require("./invoiceCrm.model.js")(sequelize, Sequelize);
+db.crmProducts = require("./crmProduct.model.js")(sequelize, Sequelize);
+
 // ====== FIXED: Register junction tables WITHOUT foreign keys first ======
 
 // 1. Product Favorites table (without foreign keys initially)
@@ -229,6 +240,28 @@ db.orders.hasMany(db.call_sales_activities, {
   as: "call_sales_activities",
   constraints: false
 });
+
+// CRM relationships
+db.customers.hasMany(db.contacts, { foreignKey: "customer_id", as: "contacts", constraints: false });
+db.contacts.belongsTo(db.customers, { foreignKey: "customer_id", as: "customer", constraints: false });
+db.customers.hasMany(db.deals, { foreignKey: "customer_id", as: "deals", constraints: false });
+db.deals.belongsTo(db.customers, { foreignKey: "customer_id", as: "customer", constraints: false });
+db.customers.hasMany(db.tasksCrm, { foreignKey: "customer_id", as: "tasks", constraints: false });
+db.deals.hasMany(db.tasksCrm, { foreignKey: "deal_id", as: "tasks", constraints: false });
+db.tasksCrm.belongsTo(db.customers, { foreignKey: "customer_id", as: "customer", constraints: false });
+db.tasksCrm.belongsTo(db.deals, { foreignKey: "deal_id", as: "deal", constraints: false });
+db.customers.hasMany(db.notesCrm, { foreignKey: "customer_id", as: "notes", constraints: false });
+db.deals.hasMany(db.notesCrm, { foreignKey: "deal_id", as: "notes", constraints: false });
+db.notesCrm.belongsTo(db.customers, { foreignKey: "customer_id", as: "customer", constraints: false });
+db.notesCrm.belongsTo(db.deals, { foreignKey: "deal_id", as: "deal", constraints: false });
+db.customers.hasMany(db.smsMessages, { foreignKey: "customer_id", as: "smsMessages", constraints: false });
+db.smsMessages.belongsTo(db.customers, { foreignKey: "customer_id", as: "customer", constraints: false });
+db.customers.hasMany(db.emailsCrm, { foreignKey: "customer_id", as: "emails", constraints: false });
+db.emailsCrm.belongsTo(db.customers, { foreignKey: "customer_id", as: "customer", constraints: false });
+db.customers.hasMany(db.invoicesCrm, { foreignKey: "customer_id", as: "invoices", constraints: false });
+db.deals.hasMany(db.invoicesCrm, { foreignKey: "deal_id", as: "invoices", constraints: false });
+db.invoicesCrm.belongsTo(db.customers, { foreignKey: "customer_id", as: "customer", constraints: false });
+db.invoicesCrm.belongsTo(db.deals, { foreignKey: "deal_id", as: "deal", constraints: false });
 
 // Call associate functions if they exist (for models that define their own associations)
 Object.keys(db).forEach(modelName => {

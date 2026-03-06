@@ -97,6 +97,17 @@ require('./app/routes/call_sales_activity.routes')(app);
 require('./app/routes/gift_setting.routes')(app);
 require('./app/routes/partner.routes')(app);
 
+// CRM routes
+require('./app/routes/crm/dashboard.routes')(app);
+require('./app/routes/crm/customer.routes')(app);
+require('./app/routes/crm/contact.routes')(app);
+require('./app/routes/crm/deal.routes')(app);
+require('./app/routes/crm/taskCrm.routes')(app);
+require('./app/routes/crm/noteCrm.routes')(app);
+require('./app/routes/crm/smsMessage.routes')(app);
+require('./app/routes/crm/emailCrm.routes')(app);
+require('./app/routes/crm/invoiceCrm.routes')(app);
+require('./app/routes/crm/crmProduct.routes')(app);
 
 // Add error handling for undefined routes
 app.all('*', (req, res) => {

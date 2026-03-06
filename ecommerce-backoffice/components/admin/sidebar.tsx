@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Home, Users, Settings, Clock, ShoppingCart, FolderOpen, Wallet, FileText, Ticket, Image, MessageSquare, Phone, Gift, Handshake } from "lucide-react";
+import { Home, Users, Settings, Clock, ShoppingCart, FolderOpen, Wallet, FileText, Ticket, Image, MessageSquare, Phone, Gift, Handshake, Briefcase, UserCircle, Contact, Target, CheckSquare, StickyNote, Mail, Receipt, Package } from "lucide-react";
 import { useState, useEffect } from "react";
 
 const links = [
@@ -11,7 +11,7 @@ const links = [
   { href: "/admin/users", label: "Хэрэглэгч", icon: Users },
   { href: "/admin/product", label: "Бүтээгдэхүүн", icon: Settings },
   { href: "/admin/order", label: "Захиалга", icon: ShoppingCart },
-    { href: "/admin/qpay", label: "Qpay төлбөрүүд", icon: ShoppingCart },
+  { href: "/admin/qpay", label: "Qpay төлбөрүүд", icon: ShoppingCart },
   { href: "/admin/categories", label: "Ангилал", icon: FolderOpen },
   { href: "/admin/bank-accounts", label: "Банкны данс", icon: Wallet },
   { href: "/admin/coupons", label: "Урамшуулал", icon: Ticket },
@@ -21,6 +21,17 @@ const links = [
   { href: "/admin/call-sales", label: "Утасны харилцаа", icon: Phone },
   { href: "/admin/gift-settings", label: "Бэлгийн тохиргоо", icon: Gift },
   { href: "/admin/partners", label: "Хамтран ажиллагсад", icon: Handshake },
+  // CRM
+  { href: "/admin/crm", label: "CRM", icon: Briefcase },
+  { href: "/admin/crm/customers", label: "CRM - Харилцагчид", icon: UserCircle },
+  { href: "/admin/crm/contacts", label: "CRM - Холбоо барих", icon: Contact },
+  { href: "/admin/crm/deals", label: "CRM - Гүйлгээ", icon: Target },
+  { href: "/admin/crm/tasks", label: "CRM - Даалгавар", icon: CheckSquare },
+  { href: "/admin/crm/notes", label: "CRM - Тэмдэглэл", icon: StickyNote },
+  { href: "/admin/crm/sms", label: "CRM - SMS", icon: MessageSquare },
+  { href: "/admin/crm/emails", label: "CRM - И-мэйл", icon: Mail },
+  { href: "/admin/crm/invoices", label: "CRM - Нэхэмжлэх", icon: Receipt },
+  { href: "/admin/crm/products", label: "CRM - Бүтээгдэхүүн", icon: Package },
 ];
 
 export function Sidebar() {
