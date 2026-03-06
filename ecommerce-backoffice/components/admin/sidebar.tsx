@@ -3,10 +3,33 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Home, Users, Settings, Clock, ShoppingCart, FolderOpen, Wallet, FileText, Ticket, Image, MessageSquare, Phone, Gift, Handshake, Briefcase, UserCircle, Contact, Target, CheckSquare, StickyNote, Mail, Receipt, Package } from "lucide-react";
+import {
+  Home,
+  Users,
+  Settings,
+  Clock,
+  ShoppingCart,
+  FolderOpen,
+  Wallet,
+  FileText,
+  Ticket,
+  Image,
+  MessageSquare,
+  Phone,
+  Gift,
+  Handshake,
+  Briefcase,
+  UserCircle,
+  Target,
+  CheckSquare,
+  StickyNote,
+  Mail,
+  Receipt,
+  Package,
+} from "lucide-react";
 import { useState, useEffect } from "react";
 
-const links = [
+const mainLinks = [
   { href: "/admin", label: "Хянах самбар", icon: Home },
   { href: "/admin/users", label: "Хэрэглэгч", icon: Users },
   { href: "/admin/product", label: "Бүтээгдэхүүн", icon: Settings },
@@ -21,22 +44,26 @@ const links = [
   { href: "/admin/call-sales", label: "Утасны харилцаа", icon: Phone },
   { href: "/admin/gift-settings", label: "Бэлгийн тохиргоо", icon: Gift },
   { href: "/admin/partners", label: "Хамтран ажиллагсад", icon: Handshake },
-  // CRM
-  { href: "/admin/crm", label: "CRM", icon: Briefcase },
-  { href: "/admin/crm/customers", label: "CRM - Харилцагчид", icon: UserCircle },
-  { href: "/admin/crm/contacts", label: "CRM - Холбоо барих", icon: Contact },
-  { href: "/admin/crm/deals", label: "CRM - Гүйлгээ", icon: Target },
-  { href: "/admin/crm/tasks", label: "CRM - Даалгавар", icon: CheckSquare },
-  { href: "/admin/crm/notes", label: "CRM - Тэмдэглэл", icon: StickyNote },
-  { href: "/admin/crm/sms", label: "CRM - SMS", icon: MessageSquare },
-  { href: "/admin/crm/emails", label: "CRM - И-мэйл", icon: Mail },
-  { href: "/admin/crm/invoices", label: "CRM - Нэхэмжлэх", icon: Receipt },
-  { href: "/admin/crm/products", label: "CRM - Бүтээгдэхүүн", icon: Package },
+];
+
+const crmLinks = [
+  { href: "/admin/crm", label: "CRM хянах самбар", icon: Briefcase },
+  { href: "/admin/crm/customers", label: "Харилцагчид", icon: UserCircle },
+  { href: "/admin/crm/contacts", label: "Холбоо барих", icon: UserCircle },
+  { href: "/admin/crm/deals", label: "Гүйлгээ", icon: Target },
+  { href: "/admin/crm/tasks", label: "Даалгавар", icon: CheckSquare },
+  { href: "/admin/crm/notes", label: "Тэмдэглэл", icon: StickyNote },
+  { href: "/admin/crm/sms", label: "SMS", icon: MessageSquare },
+  { href: "/admin/crm/emails", label: "И-мэйл", icon: Mail },
+  { href: "/admin/crm/invoices", label: "Нэхэмжлэх", icon: Receipt },
+  { href: "/admin/crm/products", label: "Бүтээгдэхүүн", icon: Package },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const [isMounted, setIsMounted] = useState(false);
+  const isCrmRoute = pathname?.startsWith("/admin/crm");
+  const [isCrmOpen, setIsCrmOpen] = useState<boolean>(!!isCrmRoute);
 
   // This ensures we only render after component is mounted on client
   useEffect(() => {
@@ -49,7 +76,7 @@ export function Sidebar() {
       <aside className="w-64 bg-background border-r p-4 flex flex-col">
         <h1 className="text-lg font-bold mb-6">Admin Panel</h1>
         <nav className="flex flex-col gap-2">
-          {links.map(({ href, label, icon: Icon }) => (
+          {mainLinks.map(({ href, label, icon: Icon }) => (
             <div
               key={href}
               className={cn(
@@ -70,21 +97,58 @@ export function Sidebar() {
     <aside className="w-64 bg-background border-r p-4 flex flex-col">
       <h1 className="text-lg font-bold mb-6">Admin Panel</h1>
       <nav className="flex flex-col gap-2">
-        {links.map(({ href, label, icon: Icon }) => (
+        {mainLinks.map(({ href, label, icon: Icon }) => (
           <Link
             key={href}
             href={href}
             className={cn(
               "flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium hover:bg-muted transition",
-              pathname === href || (href !== "/admin" && pathname?.startsWith(href)) 
-                ? "bg-muted text-primary" 
+              pathname === href || (href !== "/admin" && pathname?.startsWith(href))
+                ? "bg-muted text-primary"
                 : "text-muted-foreground"
             )}
           >
-            <Icon className="w-4 h-4" /> 
+            <Icon className="w-4 h-4" />
             {label}
           </Link>
         ))}
+
+        {/* CRM grouped submenu */}
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={() => setIsCrmOpen((open) => !open)}
+            className={cn(
+              "w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium hover:bg-muted transition",
+              isCrmRoute ? "bg-muted text-primary" : "text-muted-foreground"
+            )}
+          >
+            <span className="flex items-center gap-2">
+              <Briefcase className="w-4 h-4" />
+              <span>CRM</span>
+            </span>
+            <span className="text-xs">{isCrmOpen ? "−" : "+"}</span>
+          </button>
+          {isCrmOpen && (
+            <div className="mt-1 ml-4 flex flex-col gap-1">
+              {crmLinks.map(({ href, label, icon: Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium hover:bg-muted transition",
+                    pathname === href
+                      ? "bg-muted text-primary"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  <Icon className="w-3 h-3" />
+                  {label}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
       </nav>
     </aside>
   );

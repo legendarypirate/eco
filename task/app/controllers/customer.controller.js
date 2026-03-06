@@ -1,6 +1,13 @@
 const db = require("../models");
 const Customer = db.customers;
 const Op = db.Sequelize.Op;
+const multer = require("multer");
+const xlsx = require("xlsx");
+
+const uploadExcel = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+}).single("file");
 
 const validateEmail = (email) => {
   if (!email) return true;
@@ -118,4 +125,82 @@ exports.delete = async (req, res) => {
   } catch (err) {
     res.status(500).send({ message: err.message || "Error deleting customer." });
   }
+};
+
+// Bulk import customers from Excel (first sheet)
+exports.bulkImport = (req, res) => {
+  uploadExcel(req, res, async (err) => {
+    try {
+      if (err) {
+        return res.status(400).send({ message: err.message || "Error uploading file." });
+      }
+
+      if (!req.file) {
+        return res.status(400).send({ message: "Excel file is required (field name: file)." });
+      }
+
+      const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
+      const sheetName = workbook.SheetNames[0];
+      if (!sheetName) {
+        return res.status(400).send({ message: "Excel file has no sheets." });
+      }
+
+      const sheet = workbook.Sheets[sheetName];
+      const rows = xlsx.utils.sheet_to_json(sheet, { defval: "" });
+
+      if (!rows.length) {
+        return res.status(400).send({ message: "Excel file is empty." });
+      }
+
+      const customersToCreate = [];
+
+      for (const row of rows) {
+        const normalized = {};
+        Object.keys(row).forEach((key) => {
+          if (!key) return;
+          normalized[key.toString().trim().toLowerCase()] = row[key];
+        });
+
+        const name =
+          normalized["name"] ||
+          normalized["customer name"] ||
+          normalized["customer"] ||
+          "";
+
+        if (!name || !name.toString().trim()) {
+          continue; // skip rows without a name
+        }
+
+        const email = normalized["email"] || "";
+        const companyEmail = normalized["company_email"] || normalized["company email"] || "";
+
+        if (email && !validateEmail(email)) continue;
+        if (companyEmail && !validateEmail(companyEmail)) continue;
+
+        customersToCreate.push({
+          name: name.toString().trim(),
+          email: email ? email.toString().trim() : null,
+          phone: (normalized["phone"] || "").toString().trim() || null,
+          address: (normalized["address"] || "").toString().trim() || null,
+          company_name: (normalized["company_name"] || normalized["company name"] || "").toString().trim() || null,
+          company_contact_person: (normalized["company_contact_person"] || normalized["company contact person"] || "").toString().trim() || null,
+          company_email: companyEmail ? companyEmail.toString().trim() : null,
+          company_phone: (normalized["company_phone"] || normalized["company phone"] || "").toString().trim() || null,
+        });
+      }
+
+      if (!customersToCreate.length) {
+        return res.status(400).send({ message: "No valid rows found in Excel file." });
+      }
+
+      const created = await Customer.bulkCreate(customersToCreate);
+      res.send({
+        message: "Customers imported successfully.",
+        imported: created.length,
+      });
+    } catch (e) {
+      console.error("Bulk import error:", e);
+      res.status(500).send({ message: e.message || "Error importing customers." });
+    }
+  });
 };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Edit, Trash, Loader2 } from "lucide-react";
+import { Plus, Edit, Trash, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,6 +47,7 @@ export default function CRMCustomersPage() {
   const [formData, setFormData] = useState(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const fetchCustomers = async () => {
     try {
@@ -143,6 +144,41 @@ export default function CRMCustomersPage() {
     setIsDialogOpen(true);
   };
 
+  const handleImport = async (e: any) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
+      setError("Excel (.xlsx, .xls) файл оруулна уу.");
+      e.target.value = "";
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      setImporting(true);
+      setError(null);
+      const res = await fetch(`${API_URL}/import`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Импорт хийхэд алдаа гарлаа");
+      }
+      setSuccess("Харилцагчдыг амжилттай импортоллоо.");
+      fetchCustomers();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Импорт хийхэд алдаа гарлаа");
+    } finally {
+      setImporting(false);
+      e.target.value = "";
+    }
+  };
+
   const totalPages = Math.ceil(data.total / data.limit) || 1;
 
   return (
@@ -152,9 +188,27 @@ export default function CRMCustomersPage() {
           <h1 className="text-2xl font-bold">CRM - Харилцагчид</h1>
           <p className="text-muted-foreground">Нэр, и-мэйл, компанийн нэрээр хайх</p>
         </div>
-        <Button onClick={openCreate} className="flex items-center gap-2">
-          <Plus className="h-4 w-4" /> Нэмэх
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={openCreate} className="flex items-center gap-2">
+            <Plus className="h-4 w-4" /> Нэмэх
+          </Button>
+          <label className="flex items-center">
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              onChange={handleImport}
+            />
+            <Button type="button" variant="outline" className="flex items-center gap-2">
+              {importing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4" />
+              )}
+              Excel импорт
+            </Button>
+          </label>
+        </div>
       </div>
 
       {success && <div className="p-3 bg-green-50 border border-green-200 rounded-md text-sm text-green-700">{success}</div>}
