@@ -49,6 +49,9 @@ async function syncDatabase() {
     
     // Ensure partners table exists
     await db.ensurePartnersTable();
+
+    // Ensure CRM tables exist (customers, contacts, deals, etc.)
+    await db.ensureCrmTables();
     
     // Then sync the database
     await db.sequelize.sync({ alter: true });

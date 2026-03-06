@@ -884,4 +884,154 @@ db.ensurePartnersTable = async function() {
   }
 };
 
+// Ensure CRM tables exist (so API works even if migrations were not run on this DB)
+db.ensureCrmTables = async function() {
+  try {
+    const [customersExist] = await this.sequelize.query(`
+      SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'customers');
+    `);
+    if (customersExist[0].exists) {
+      return; // CRM already set up
+    }
+    console.log('🔧 Creating CRM tables...');
+
+    await this.sequelize.query(`
+      CREATE TABLE IF NOT EXISTS customers (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255),
+        phone VARCHAR(50),
+        address TEXT,
+        company_name VARCHAR(255),
+        company_contact_person VARCHAR(255),
+        company_email VARCHAR(255),
+        company_phone VARCHAR(50),
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      );
+    `);
+    await this.sequelize.query(`CREATE INDEX IF NOT EXISTS customers_name_idx ON customers (name);`);
+    await this.sequelize.query(`CREATE INDEX IF NOT EXISTS customers_email_idx ON customers (email);`);
+    await this.sequelize.query(`CREATE INDEX IF NOT EXISTS customers_company_name_idx ON customers (company_name);`);
+
+    await this.sequelize.query(`
+      CREATE TABLE IF NOT EXISTS contacts (
+        id SERIAL PRIMARY KEY,
+        customer_id INTEGER NOT NULL REFERENCES customers(id) ON UPDATE CASCADE ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255),
+        phone VARCHAR(50),
+        position VARCHAR(255),
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      );
+    `);
+    await this.sequelize.query(`CREATE INDEX IF NOT EXISTS contacts_customer_id_idx ON contacts (customer_id);`);
+
+    await this.sequelize.query(`
+      CREATE TABLE IF NOT EXISTS deals (
+        id SERIAL PRIMARY KEY,
+        customer_id INTEGER NOT NULL REFERENCES customers(id) ON UPDATE CASCADE ON DELETE CASCADE,
+        deal_name VARCHAR(255) NOT NULL,
+        amount DECIMAL(12, 2) DEFAULT 0,
+        status VARCHAR(20) NOT NULL DEFAULT 'open',
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      );
+    `);
+    await this.sequelize.query(`CREATE INDEX IF NOT EXISTS deals_customer_id_idx ON deals (customer_id);`);
+    await this.sequelize.query(`CREATE INDEX IF NOT EXISTS deals_status_idx ON deals (status);`);
+
+    await this.sequelize.query(`
+      CREATE TABLE IF NOT EXISTS tasks_crm (
+        id SERIAL PRIMARY KEY,
+        customer_id INTEGER REFERENCES customers(id) ON UPDATE CASCADE ON DELETE SET NULL,
+        deal_id INTEGER REFERENCES deals(id) ON UPDATE CASCADE ON DELETE SET NULL,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        assigned_to UUID,
+        due_date DATE,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      );
+    `);
+    await this.sequelize.query(`CREATE INDEX IF NOT EXISTS tasks_crm_customer_id_idx ON tasks_crm (customer_id);`);
+    await this.sequelize.query(`CREATE INDEX IF NOT EXISTS tasks_crm_deal_id_idx ON tasks_crm (deal_id);`);
+    await this.sequelize.query(`CREATE INDEX IF NOT EXISTS tasks_crm_status_idx ON tasks_crm (status);`);
+
+    await this.sequelize.query(`
+      CREATE TABLE IF NOT EXISTS notes_crm (
+        id SERIAL PRIMARY KEY,
+        customer_id INTEGER REFERENCES customers(id) ON UPDATE CASCADE ON DELETE CASCADE,
+        deal_id INTEGER REFERENCES deals(id) ON UPDATE CASCADE ON DELETE CASCADE,
+        user_id UUID,
+        note_text TEXT NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      );
+    `);
+    await this.sequelize.query(`CREATE INDEX IF NOT EXISTS notes_crm_customer_id_idx ON notes_crm (customer_id);`);
+    await this.sequelize.query(`CREATE INDEX IF NOT EXISTS notes_crm_deal_id_idx ON notes_crm (deal_id);`);
+
+    await this.sequelize.query(`
+      CREATE TABLE IF NOT EXISTS sms_messages (
+        id SERIAL PRIMARY KEY,
+        customer_id INTEGER NOT NULL REFERENCES customers(id) ON UPDATE CASCADE ON DELETE CASCADE,
+        message TEXT NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        sent_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      );
+    `);
+    await this.sequelize.query(`CREATE INDEX IF NOT EXISTS sms_messages_customer_id_idx ON sms_messages (customer_id);`);
+
+    await this.sequelize.query(`
+      CREATE TABLE IF NOT EXISTS emails_crm (
+        id SERIAL PRIMARY KEY,
+        customer_id INTEGER NOT NULL REFERENCES customers(id) ON UPDATE CASCADE ON DELETE CASCADE,
+        subject VARCHAR(500),
+        body TEXT,
+        status VARCHAR(20) NOT NULL DEFAULT 'draft',
+        sent_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      );
+    `);
+    await this.sequelize.query(`CREATE INDEX IF NOT EXISTS emails_crm_customer_id_idx ON emails_crm (customer_id);`);
+
+    await this.sequelize.query(`
+      CREATE TABLE IF NOT EXISTS invoices_crm (
+        id SERIAL PRIMARY KEY,
+        customer_id INTEGER NOT NULL REFERENCES customers(id) ON UPDATE CASCADE ON DELETE CASCADE,
+        deal_id INTEGER REFERENCES deals(id) ON UPDATE CASCADE ON DELETE SET NULL,
+        amount DECIMAL(12, 2) NOT NULL DEFAULT 0,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        issued_at TIMESTAMP WITH TIME ZONE,
+        paid_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      );
+    `);
+    await this.sequelize.query(`CREATE INDEX IF NOT EXISTS invoices_crm_customer_id_idx ON invoices_crm (customer_id);`);
+    await this.sequelize.query(`CREATE INDEX IF NOT EXISTS invoices_crm_deal_id_idx ON invoices_crm (deal_id);`);
+
+    await this.sequelize.query(`
+      CREATE TABLE IF NOT EXISTS crm_products (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        price DECIMAL(12, 2) DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    console.log('✅ CRM tables created');
+  } catch (error) {
+    console.error('❌ Error ensuring CRM tables:', error.message);
+  }
+};
+
 module.exports = db;
