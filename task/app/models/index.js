@@ -903,6 +903,8 @@ db.ensureCrmTables = async function() {
         phone VARCHAR(50),
         address TEXT,
         company_name VARCHAR(255),
+        company_register VARCHAR(100),
+        company_address TEXT,
         company_contact_person VARCHAR(255),
         company_email VARCHAR(255),
         company_phone VARCHAR(50),
@@ -913,6 +915,8 @@ db.ensureCrmTables = async function() {
     await this.sequelize.query(`CREATE INDEX IF NOT EXISTS customers_name_idx ON customers (name);`);
     await this.sequelize.query(`CREATE INDEX IF NOT EXISTS customers_email_idx ON customers (email);`);
     await this.sequelize.query(`CREATE INDEX IF NOT EXISTS customers_company_name_idx ON customers (company_name);`);
+    await this.sequelize.query(`ALTER TABLE customers ADD COLUMN IF NOT EXISTS company_register VARCHAR(100);`);
+    await this.sequelize.query(`ALTER TABLE customers ADD COLUMN IF NOT EXISTS company_address TEXT;`);
 
     await this.sequelize.query(`
       CREATE TABLE IF NOT EXISTS contacts (

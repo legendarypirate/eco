@@ -5,6 +5,9 @@ module.exports = (app) => {
   // Bulk import (Excel)
   router.post("/import", controller.bulkImport);
 
+  // Download Excel template
+  router.get("/template", controller.downloadTemplate);
+
   // CRUD
   router.post("/", controller.create);
   router.get("/", controller.findAll);

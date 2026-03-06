@@ -10,6 +10,8 @@ module.exports = (sequelize, Sequelize) => {
     phone: { type: Sequelize.STRING(50), allowNull: true },
     address: { type: Sequelize.TEXT, allowNull: true },
     company_name: { type: Sequelize.STRING(255), allowNull: true },
+    company_register: { type: Sequelize.STRING(100), allowNull: true },
+    company_address: { type: Sequelize.TEXT, allowNull: true },
     company_contact_person: { type: Sequelize.STRING(255), allowNull: true },
     company_email: { type: Sequelize.STRING(255), allowNull: true },
     company_phone: { type: Sequelize.STRING(50), allowNull: true },

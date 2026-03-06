@@ -17,7 +17,7 @@ const validateEmail = (email) => {
 
 exports.create = async (req, res) => {
   try {
-    const { name, email, phone, address, company_name, company_contact_person, company_email, company_phone } = req.body;
+    const { name, email, phone, address, company_name, company_register, company_address, company_contact_person, company_email, company_phone } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).send({ message: "Name is required." });
     }
@@ -33,6 +33,8 @@ exports.create = async (req, res) => {
       phone: phone?.trim() || null,
       address: address?.trim() || null,
       company_name: company_name?.trim() || null,
+      company_register: company_register?.trim() || null,
+      company_address: company_address?.trim() || null,
       company_contact_person: company_contact_person?.trim() || null,
       company_email: company_email?.trim() || null,
       company_phone: company_phone?.trim() || null
@@ -88,7 +90,7 @@ exports.findOne = async (req, res) => {
 exports.update = async (req, res) => {
   try {
     const id = req.params.id;
-    const { name, email, phone, address, company_name, company_contact_person, company_email, company_phone } = req.body;
+    const { name, email, phone, address, company_name, company_register, company_address, company_contact_person, company_email, company_phone } = req.body;
     if (email && !validateEmail(email)) {
       return res.status(400).send({ message: "Invalid email." });
     }
@@ -102,6 +104,8 @@ exports.update = async (req, res) => {
         ...(phone !== undefined && { phone: phone?.trim() || null }),
         ...(address !== undefined && { address: address?.trim() || null }),
         ...(company_name !== undefined && { company_name: company_name?.trim() || null }),
+        ...(company_register !== undefined && { company_register: company_register?.trim() || null }),
+        ...(company_address !== undefined && { company_address: company_address?.trim() || null }),
         ...(company_contact_person !== undefined && { company_contact_person: company_contact_person?.trim() || null }),
         ...(company_email !== undefined && { company_email: company_email?.trim() || null }),
         ...(company_phone !== undefined && { company_phone: company_phone?.trim() || null })
@@ -183,6 +187,8 @@ exports.bulkImport = (req, res) => {
           phone: (normalized["phone"] || "").toString().trim() || null,
           address: (normalized["address"] || "").toString().trim() || null,
           company_name: (normalized["company_name"] || normalized["company name"] || "").toString().trim() || null,
+          company_register: (normalized["company_register"] || normalized["company register"] || "").toString().trim() || null,
+          company_address: (normalized["company_address"] || normalized["company address"] || "").toString().trim() || null,
           company_contact_person: (normalized["company_contact_person"] || normalized["company contact person"] || "").toString().trim() || null,
           company_email: companyEmail ? companyEmail.toString().trim() : null,
           company_phone: (normalized["company_phone"] || normalized["company phone"] || "").toString().trim() || null,
@@ -203,4 +209,32 @@ exports.bulkImport = (req, res) => {
       res.status(500).send({ message: e.message || "Error importing customers." });
     }
   });
+};
+
+// Download Excel import template
+exports.downloadTemplate = (req, res) => {
+  try {
+    const headers = [
+      "name",
+      "email",
+      "phone",
+      "address",
+      "company_name",
+      "company_register",
+      "company_address",
+      "company_contact_person",
+      "company_email",
+      "company_phone"
+    ];
+    const wb = xlsx.utils.book_new();
+    const ws = xlsx.utils.aoa_to_sheet([headers]);
+    xlsx.utils.book_append_sheet(wb, ws, "Customers");
+    const buf = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", "attachment; filename=customers_import_template.xlsx");
+    res.send(buf);
+  } catch (e) {
+    console.error("Template download error:", e);
+    res.status(500).send({ message: e.message || "Error generating template." });
+  }
 };

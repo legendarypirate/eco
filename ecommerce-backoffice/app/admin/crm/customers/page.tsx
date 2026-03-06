@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Edit, Trash, Loader2, Upload } from "lucide-react";
+import { Plus, Edit, Trash, Loader2, Upload, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +18,8 @@ interface Customer {
   phone: string | null;
   address: string | null;
   company_name: string | null;
+  company_register: string | null;
+  company_address: string | null;
   company_contact_person: string | null;
   company_email: string | null;
   company_phone: string | null;
@@ -31,6 +33,8 @@ const emptyForm = {
   phone: "",
   address: "",
   company_name: "",
+  company_register: "",
+  company_address: "",
   company_contact_person: "",
   company_email: "",
   company_phone: "",
@@ -88,6 +92,8 @@ export default function CRMCustomersPage() {
         phone: formData.phone.trim() || null,
         address: formData.address.trim() || null,
         company_name: formData.company_name.trim() || null,
+        company_register: formData.company_register.trim() || null,
+        company_address: formData.company_address.trim() || null,
         company_contact_person: formData.company_contact_person.trim() || null,
         company_email: formData.company_email.trim() || null,
         company_phone: formData.company_phone.trim() || null,
@@ -131,6 +137,8 @@ export default function CRMCustomersPage() {
       phone: c.phone ?? "",
       address: c.address ?? "",
       company_name: c.company_name ?? "",
+      company_register: c.company_register ?? "",
+      company_address: c.company_address ?? "",
       company_contact_person: c.company_contact_person ?? "",
       company_email: c.company_email ?? "",
       company_phone: c.company_phone ?? "",
@@ -142,6 +150,22 @@ export default function CRMCustomersPage() {
     setEditing(null);
     setFormData(emptyForm);
     setIsDialogOpen(true);
+  };
+
+  const handleDownloadTemplate = async () => {
+    try {
+      const res = await fetch(`${API_URL}/template`);
+      if (!res.ok) throw new Error("Татаж авахад алдаа гарлаа");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "customers_import_template.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Татаж авахад алдаа гарлаа");
+    }
   };
 
   const handleImport = async (e: any) => {
@@ -192,7 +216,10 @@ export default function CRMCustomersPage() {
           <Button onClick={openCreate} className="flex items-center gap-2">
             <Plus className="h-4 w-4" /> Нэмэх
           </Button>
-          <label className="flex items-center">
+          <Button variant="outline" onClick={handleDownloadTemplate} className="flex items-center gap-2">
+            <Download className="h-4 w-4" /> Импорт загвар татах
+          </Button>
+          <label className="flex items-center cursor-pointer">
             <input
               type="file"
               accept=".xlsx,.xls"
@@ -251,6 +278,7 @@ export default function CRMCustomersPage() {
                       <TableHead>Нэр</TableHead>
                       <TableHead>И-мэйл</TableHead>
                       <TableHead>Утас</TableHead>
+                      <TableHead>Хаяг</TableHead>
                       <TableHead>Компани</TableHead>
                       <TableHead className="w-28">Үйлдэл</TableHead>
                     </TableRow>
@@ -261,6 +289,7 @@ export default function CRMCustomersPage() {
                         <TableCell className="font-medium">{c.name}</TableCell>
                         <TableCell>{c.email ?? "-"}</TableCell>
                         <TableCell>{c.phone ?? "-"}</TableCell>
+                        <TableCell className="max-w-[200px] truncate" title={c.address ?? undefined}>{c.address ?? "-"}</TableCell>
                         <TableCell>{c.company_name ?? "-"}</TableCell>
                         <TableCell>
                           <div className="flex gap-2">
@@ -311,6 +340,14 @@ export default function CRMCustomersPage() {
             <div className="space-y-2">
               <Label>Компанийн нэр</Label>
               <Input value={formData.company_name} onChange={(e) => setFormData({ ...formData, company_name: e.target.value })} placeholder="Компани" />
+            </div>
+            <div className="space-y-2">
+              <Label>Компанийн регистр</Label>
+              <Input value={formData.company_register} onChange={(e) => setFormData({ ...formData, company_register: e.target.value })} placeholder="Регистрийн дугаар" />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label>Компанийн хаяг</Label>
+              <Input value={formData.company_address} onChange={(e) => setFormData({ ...formData, company_address: e.target.value })} placeholder="Компанийн хаяг" />
             </div>
             <div className="space-y-2">
               <Label>Компанийн холбоо барих хүн</Label>
