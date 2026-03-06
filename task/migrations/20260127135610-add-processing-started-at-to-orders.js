@@ -3,17 +3,21 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    // Add processing_started_at column to orders table
+    const tableInfo = await queryInterface.describeTable('orders');
+    if (tableInfo && tableInfo.processing_started_at) {
+      return; // column already exists
+    }
     await queryInterface.addColumn('orders', 'processing_started_at', {
       type: Sequelize.DATE,
-      allowNull: true,
-      comment: 'Timestamp when order status changed to processing (боловсруулж байна)'
+      allowNull: true
     });
   },
 
   async down(queryInterface, Sequelize) {
-    // Remove processing_started_at column
-    await queryInterface.removeColumn('orders', 'processing_started_at');
+    const tableInfo = await queryInterface.describeTable('orders');
+    if (tableInfo && tableInfo.processing_started_at) {
+      await queryInterface.removeColumn('orders', 'processing_started_at');
+    }
   }
 };
 
