@@ -472,9 +472,10 @@ interface ProductEditFormProps {
   isCreating?: boolean;
   categories: Category[];
   bankAccounts: BankAccount[];
+  bankAccountsLoading?: boolean;
 }
 
-function ProductEditForm({ product, onCancel, onSave, isCreating = false, categories, bankAccounts }: ProductEditFormProps) {
+function ProductEditForm({ product, onCancel, onSave, isCreating = false, categories, bankAccounts, bankAccountsLoading = false }: ProductEditFormProps) {
   const [form, setForm] = useState<Product>({ ...product });
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [selectedAttributes, setSelectedAttributes] = useState<AttributeType[]>([defaultAttributes[0]]);
@@ -2511,6 +2512,7 @@ export default function AdminProductList() {
             isCreating={isCreating}
             categories={categories}
             bankAccounts={bankAccounts}
+            bankAccountsLoading={bankAccountsLoading}
           />
         )}
       </Drawer>
