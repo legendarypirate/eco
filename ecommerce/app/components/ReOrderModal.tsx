@@ -168,6 +168,8 @@ export default function ReOrderModal({ isOpen, onClose, order }: ReOrderModalPro
               category: product.category || '',
               inStock: selectedVariation ? (selectedVariation.inStock !== false) : (product.inStock !== false),
               sku: selectedVariation?.sku || product.sku || item.sku || '',
+              company: product.company,
+              bankAccountId: product.bankAccountId,
             },
             quantity: item.quantity,
             selectedSize: selectedSize,

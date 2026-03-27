@@ -16,6 +16,8 @@ interface BankAccount {
   is_active: boolean;
   display_order: number;
   color_scheme: string;
+  // Owning company (terguun_gereg | geregesoft)
+  company?: string;
 }
 
 const colorSchemeClasses: Record<string, string> = {
@@ -39,6 +41,8 @@ interface Step2ContentProps {
   formatPrice: (price: number) => string;
   completeOrder: () => Promise<void>;
   setStep: (step: number) => void;
+  // Used to filter which bank accounts show for the chosen company
+  allowedCompanyKeys?: string[];
 }
 
 const Step2Content = ({
@@ -53,10 +57,17 @@ const Step2Content = ({
   total,
   formatPrice,
   completeOrder,
-  setStep
+  setStep,
+  allowedCompanyKeys
 }: Step2ContentProps) => {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [loadingBankAccounts, setLoadingBankAccounts] = useState(true);
+
+  const DEFAULT_COMPANY_KEY = 'terguun_gereg';
+  const allowedCompanies = (allowedCompanyKeys && allowedCompanyKeys.length > 0
+    ? allowedCompanyKeys
+    : [DEFAULT_COMPANY_KEY]
+  ).filter(Boolean);
 
   // Fetch bank accounts
   useEffect(() => {
@@ -72,7 +83,13 @@ const Step2Content = ({
         
         const result = await response.json();
         if (result.success && result.data) {
-          setBankAccounts(result.data);
+          // Filter bank accounts by company selection (default to Terguun Gerege)
+          setBankAccounts(
+            result.data.filter((acc: BankAccount) => {
+              const accCompany = acc.company || DEFAULT_COMPANY_KEY;
+              return allowedCompanies.includes(accCompany);
+            })
+          );
         }
       } catch (error) {
         console.error('Error fetching bank accounts:', error);
@@ -84,7 +101,7 @@ const Step2Content = ({
     };
 
     fetchBankAccounts();
-  }, []);
+  }, [allowedCompanies.join("|")]);
 
   return (
     <div className="space-y-6">

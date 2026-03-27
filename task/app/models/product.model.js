@@ -175,6 +175,17 @@ module.exports = (sequelize, Sequelize) => {
             type: Sequelize.DATE,
             defaultValue: Sequelize.NOW,
             field: 'published_at'
+        },
+        // Which partner/company this product belongs to (affects bank account shown on checkout)
+        company: {
+            type: Sequelize.STRING(50),
+            allowNull: true,
+            defaultValue: 'terguun_gereg'
+        },
+        bankAccountId: {
+            type: Sequelize.INTEGER,
+            allowNull: true,
+            field: 'bank_account_id'
         }
     }, {
         timestamps: false,

@@ -75,7 +75,7 @@ exports.getById = async (req, res) => {
 // Create new bank account
 exports.create = async (req, res) => {
   try {
-    const { bank_name, account_number, account_name, is_active, display_order, color_scheme } = req.body;
+    const { bank_name, account_number, account_name, is_active, display_order, color_scheme, company } = req.body;
 
     if (!bank_name || !account_number || !account_name) {
       return res.status(400).json({
@@ -90,7 +90,8 @@ exports.create = async (req, res) => {
       account_name,
       is_active: is_active !== undefined ? is_active : true,
       display_order: display_order || 0,
-      color_scheme: color_scheme || 'blue'
+      color_scheme: color_scheme || 'blue',
+      company: company || 'terguun_gereg'
     });
 
     res.status(201).json({
@@ -112,7 +113,7 @@ exports.create = async (req, res) => {
 exports.update = async (req, res) => {
   try {
     const { id } = req.params;
-    const { bank_name, account_number, account_name, is_active, display_order, color_scheme } = req.body;
+    const { bank_name, account_number, account_name, is_active, display_order, color_scheme, company } = req.body;
 
     const bankAccount = await BankAccount.findByPk(id);
 
@@ -130,6 +131,7 @@ exports.update = async (req, res) => {
     if (is_active !== undefined) bankAccount.is_active = is_active;
     if (display_order !== undefined) bankAccount.display_order = display_order;
     if (color_scheme !== undefined) bankAccount.color_scheme = color_scheme;
+    if (company !== undefined) bankAccount.company = company;
 
     await bankAccount.save();
 

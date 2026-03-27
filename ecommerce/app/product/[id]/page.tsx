@@ -282,7 +282,9 @@ const handleAddToCart = async () => {
         image: product.images?.[0] || '',
         thumbnail: product.thumbnail || product.images?.[0] || '',
         category: product.category || '',
-        inStock: currentInStock
+        inStock: currentInStock,
+        company: product.company,
+        bankAccountId: product.bankAccountId,
       },
       quantity: quantity,
       selectedSize: selectedSize || 'M',

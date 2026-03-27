@@ -30,6 +30,9 @@ interface Product {
   isLimited: boolean;
   sales: number;
   slug: string;
+  // Optional: affects checkout bank accounts
+  company?: string;
+  bankAccountId?: number;
   variations?: ProductVariation[];
   colorOptions?: ColorOption[];
   categories?: Category[];
@@ -548,7 +551,9 @@ const ProductListPageContent = () => {
           image: product.images?.[0] || '',
           thumbnail: product.thumbnail || product.images?.[0] || '',
           category: product.category || '',
-          inStock: currentInStock
+          inStock: currentInStock,
+          company: product.company,
+          bankAccountId: product.bankAccountId,
         },
         quantity: 1,
         selectedSize: selectedVariation?.attributes?.size || undefined,

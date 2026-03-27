@@ -79,7 +79,9 @@ const WishlistPage = () => {
         image: item.product.image || item.product.thumbnail || '',
         thumbnail: item.product.thumbnail || item.product.image || '',
         category: item.product.category || '',
-        inStock: item.product.inStock || true
+        inStock: item.product.inStock || true,
+        company: item.product.company,
+        bankAccountId: item.product.bankAccountId
       },
       quantity: 1,
       selectedSize: 'M',
@@ -113,7 +115,9 @@ const WishlistPage = () => {
           image: item.product.image || item.product.thumbnail || '',
           thumbnail: item.product.thumbnail || item.product.image || '',
           category: item.product.category || '',
-          inStock: item.product.inStock || true
+          inStock: item.product.inStock || true,
+          company: item.product.company,
+          bankAccountId: item.product.bankAccountId
         },
         quantity: 1,
         selectedSize: 'M',

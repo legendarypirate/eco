@@ -220,6 +220,9 @@ type Product = {
   category: string;
   categoryId?: string;
   subcategory?: string;
+  // Owning company (affects which bank accounts show on checkout)
+  company?: string;
+  bankAccountId?: number;
   inStock: boolean;
   stockQuantity: number;
   brand?: string;
@@ -267,6 +270,17 @@ type ProductVariation = {
   inStock: boolean;
   stockQuantity: number;
   attributes: Record<string, string>;
+};
+
+type BankAccount = {
+  id: number;
+  bank_name: string;
+  account_number: string;
+  account_name: string;
+  is_active: boolean;
+  display_order: number;
+  color_scheme: string;
+  company?: string;
 };
 
 // API base URL
@@ -457,9 +471,10 @@ interface ProductEditFormProps {
   onSave: (product: Product, uploadedImages: string[]) => Promise<{ success: boolean; productId?: string }>;
   isCreating?: boolean;
   categories: Category[];
+  bankAccounts: BankAccount[];
 }
 
-function ProductEditForm({ product, onCancel, onSave, isCreating = false, categories }: ProductEditFormProps) {
+function ProductEditForm({ product, onCancel, onSave, isCreating = false, categories, bankAccounts }: ProductEditFormProps) {
   const [form, setForm] = useState<Product>({ ...product });
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [selectedAttributes, setSelectedAttributes] = useState<AttributeType[]>([defaultAttributes[0]]);
@@ -472,6 +487,26 @@ function ProductEditForm({ product, onCancel, onSave, isCreating = false, catego
   const [infoImages, setInfoImages] = useState<string[]>([]);
   const [loadingInfoImages, setLoadingInfoImages] = useState(false);
   const [uploadingInfoImages, setUploadingInfoImages] = useState(false);
+
+  const DEFAULT_COMPANY_KEY = 'terguun_gereg';
+  const selectedCompany = form.company || DEFAULT_COMPANY_KEY;
+  const bankAccountsForCompany = bankAccounts.filter((ba) => (ba.company || DEFAULT_COMPANY_KEY) === selectedCompany);
+
+  // If user has not selected a bank account yet (or company changed), default to the first match.
+  useEffect(() => {
+    if (!bankAccountsForCompany.length) return;
+
+    const currentId = form.bankAccountId;
+    const hasValidSelection = currentId != null && bankAccountsForCompany.some((ba) => ba.id === currentId);
+
+    if (!hasValidSelection) {
+      setForm((prev) => ({
+        ...prev,
+        company: selectedCompany,
+        bankAccountId: bankAccountsForCompany[0].id,
+      }));
+    }
+  }, [bankAccounts, selectedCompany, form.bankAccountId]);
 
   // Function to upload images to Cloudinary
   const uploadToCloudinary = async (file: File): Promise<string> => {
@@ -966,6 +1001,60 @@ function ProductEditForm({ product, onCancel, onSave, isCreating = false, catego
                   ⚠️ Хуучин ангилал: {form.category}. Шинэ ангилал сонгох хэрэгтэй.
                 </p>
               )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium block mb-1">Компани</label>
+              <Select
+                value={selectedCompany}
+                onValueChange={(value) => {
+                  updateField("company", value);
+                  const first = bankAccounts.find((ba) => (ba.company || DEFAULT_COMPANY_KEY) === value);
+                  if (first) {
+                    updateField("bankAccountId", first.id);
+                  }
+                }}
+                disabled={uploading || bankAccountsLoading}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="terguun_gereg">Тэргүүн гэрэгэ</SelectItem>
+                  <SelectItem value="geregesoft">Гэрэгесофт</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium block mb-1">Банкны данс</label>
+              <Select
+                value={form.bankAccountId ? String(form.bankAccountId) : ""}
+                onValueChange={(value) => {
+                  if (!value) return updateField("bankAccountId", undefined);
+                  updateField("bankAccountId", parseInt(value));
+                }}
+                disabled={uploading || bankAccountsLoading || bankAccountsForCompany.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Банкны данс сонгох" />
+                </SelectTrigger>
+                <SelectContent>
+                  {bankAccountsForCompany.length === 0 ? (
+                    <SelectItem value="" disabled>
+                      Энэ компанид данс олдсонгүй
+                    </SelectItem>
+                  ) : (
+                    bankAccountsForCompany.map((ba) => (
+                      <SelectItem key={ba.id} value={String(ba.id)}>
+                        {ba.bank_name} - {ba.account_number}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -1672,6 +1761,7 @@ function Drawer({ isOpen, onClose, title, children }: DrawerProps) {
 export default function AdminProductList() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Product | null>(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
@@ -1680,6 +1770,7 @@ export default function AdminProductList() {
   const [isCreating, setIsCreating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [bankAccountsLoading, setBankAccountsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
   // Pagination state
@@ -1693,6 +1784,11 @@ export default function AdminProductList() {
     fetchCategories();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, pageSize]);
+
+  useEffect(() => {
+    fetchBankAccounts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Debounce search query
   useEffect(() => {
@@ -1753,6 +1849,26 @@ export default function AdminProductList() {
       console.error('Error fetching categories:', err);
     } finally {
       setCategoriesLoading(false);
+    }
+  };
+
+  const fetchBankAccounts = async () => {
+    try {
+      setBankAccountsLoading(true);
+      const response = await fetch(`${API_URL}/bank-accounts/active`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      const accounts = result?.data || [];
+      setBankAccounts(Array.isArray(accounts) ? accounts : []);
+    } catch (err) {
+      console.error('Error fetching bank accounts:', err);
+      setBankAccounts([]);
+    } finally {
+      setBankAccountsLoading(false);
     }
   };
 
@@ -1922,6 +2038,8 @@ export default function AdminProductList() {
       category: "",
       categoryId: "",
       subcategory: "",
+      company: "terguun_gereg",
+      bankAccountId: undefined,
       inStock: true,
       stockQuantity: 0,
       brand: "",
@@ -2392,6 +2510,7 @@ export default function AdminProductList() {
             onSave={saveEdit}
             isCreating={isCreating}
             categories={categories}
+            bankAccounts={bankAccounts}
           />
         )}
       </Drawer>

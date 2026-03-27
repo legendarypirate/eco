@@ -35,6 +35,12 @@ module.exports = (sequelize, Sequelize) => {
       allowNull: true,
       defaultValue: 'blue',
       comment: "Color scheme for the card (blue, green, etc.)"
+    },
+    company: {
+      type: Sequelize.STRING(50),
+      allowNull: true,
+      defaultValue: 'terguun_gereg',
+      comment: "Owning company (terguun_gereg | geregesoft)"
     }
   }, {
     tableName: 'bank_accounts',

@@ -38,6 +38,7 @@ interface BankAccount {
   is_active: boolean;
   display_order: number;
   color_scheme: string;
+  company?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -48,6 +49,11 @@ const colorSchemes = [
   { value: 'purple', label: 'Нил ягаан', className: 'bg-purple-50 border-purple-200' },
   { value: 'orange', label: 'Улбар шар', className: 'bg-orange-50 border-orange-200' },
   { value: 'red', label: 'Улаан', className: 'bg-red-50 border-red-200' },
+];
+
+const companyOptions = [
+  { value: 'terguun_gereg', label: 'Тэргүүн гэрэгэ' },
+  { value: 'geregesoft', label: 'Гэрэгесофт' },
 ];
 
 export default function BankAccountsPage() {
@@ -63,6 +69,7 @@ export default function BankAccountsPage() {
     is_active: true,
     display_order: 0,
     color_scheme: 'blue',
+    company: 'terguun_gereg',
   });
 
   const API_URL = `${process.env.NEXT_PUBLIC_API_URL}/api/bank-accounts`;
@@ -183,6 +190,7 @@ export default function BankAccountsPage() {
       is_active: account.is_active,
       display_order: account.display_order,
       color_scheme: account.color_scheme,
+      company: account.company || 'terguun_gereg',
     });
     setIsDialogOpen(true);
   };
@@ -203,6 +211,7 @@ export default function BankAccountsPage() {
       is_active: true,
       display_order: 0,
       color_scheme: 'blue',
+      company: 'terguun_gereg',
     });
   };
 
@@ -315,6 +324,7 @@ export default function BankAccountsPage() {
                   <TableHead>Дансны нэр</TableHead>
                   <TableHead>Эрэмбэ</TableHead>
                   <TableHead>Өнгө</TableHead>
+                  <TableHead>Компани</TableHead>
                   <TableHead>Төлөв</TableHead>
                   <TableHead className="text-right">Үйлдэл</TableHead>
                 </TableRow>
@@ -333,6 +343,9 @@ export default function BankAccountsPage() {
                           <div className={`w-4 h-4 rounded ${colorScheme?.className.split(' ')[0]}`}></div>
                           <span className="text-sm">{colorScheme?.label}</span>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {(companyOptions.find((c) => c.value === (account.company || 'terguun_gereg'))?.label) || '-'}
                       </TableCell>
                       <TableCell>
                         {account.is_active ? (
@@ -435,6 +448,25 @@ export default function BankAccountsPage() {
                     {colorSchemes.map((scheme) => (
                       <SelectItem key={scheme.value} value={scheme.value}>
                         {scheme.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="company">Компани</Label>
+                <Select
+                  value={formData.company}
+                  onValueChange={(value) => setFormData({ ...formData, company: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {companyOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
                       </SelectItem>
                     ))}
                   </SelectContent>

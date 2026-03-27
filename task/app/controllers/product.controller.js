@@ -117,7 +117,13 @@ exports.create = async (req, res) => {
       tags: req.body.tags || [],
       weight: req.body.weight,
       dimensions: req.body.dimensions,
-      publishedAt: req.body.publishedAt || new Date()
+      publishedAt: req.body.publishedAt || new Date(),
+      // Partner/company selection (affects checkout bank accounts)
+      company: req.body.company || 'terguun_gereg',
+      bankAccountId:
+        req.body.bankAccountId !== undefined
+          ? req.body.bankAccountId
+          : (req.body.bank_account_id !== undefined ? req.body.bank_account_id : null)
     };
 
     console.log('Creating product with:', {
@@ -968,13 +974,20 @@ exports.update = async (req, res) => {
                     'isBestSeller', 'isLimited', 'isGift', 'giftFloorLimit', 'gift_floor_limit', 'discount', 'discountAmount', 'salePrice',
                     'saleEndDate', 'sales', 'rating', 'reviewCount', 'slug', 'metaTitle',
                     'metaDescription', 'tags', 'weight', 'dimensions', 'publishedAt',
-                    'images']; // Added images to fields array
+                    'images',
+                    'company',
+                    'bankAccountId']; // Added checkout fields
     
     fields.forEach(field => {
       if (req.body[field] !== undefined) {
         updateData[field] = req.body[field];
       }
     });
+
+    // Backward compatibility: allow snake_case bank_account_id
+    if (req.body.bank_account_id !== undefined && updateData.bankAccountId === undefined) {
+      updateData.bankAccountId = req.body.bank_account_id;
+    }
 
     // Handle gift_floor_limit mapping (API uses snake_case, model uses camelCase)
     if (req.body.gift_floor_limit !== undefined) {

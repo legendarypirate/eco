@@ -15,6 +15,9 @@ interface Product {
   categoryId?: string;
   category?: string;
   sku?: string;
+  // Optional: affects which bank accounts should show on checkout
+  company?: string;
+  bankAccountId?: number;
   // Add other product fields as needed
 }
 

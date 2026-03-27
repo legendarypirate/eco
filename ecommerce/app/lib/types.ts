@@ -4,6 +4,9 @@ export interface Product {
   nameMn?: string;
   price: number;
   originalPrice?: number;
+  // Affects which bank accounts are shown on checkout
+  company?: string;
+  bankAccountId?: number;
   
   // Images - support multiple images
   images: string[];

@@ -169,7 +169,9 @@ const DemandedProducts: React.FC<DemandedProductsProps> = ({ products: propsProd
           image: variation.images?.[0] || parentProduct?.thumbnail || parentProduct?.images?.[0] || '',
           thumbnail: variation.thumbnail || parentProduct?.thumbnail || variation.images?.[0] || '',
           category: parentProduct?.category || '',
-          inStock: variation.inStock
+          inStock: variation.inStock,
+          company: parentProduct?.company,
+          bankAccountId: parentProduct?.bankAccountId,
         },
         quantity: 1,
         selectedSize: variation.attributes?.size || undefined,

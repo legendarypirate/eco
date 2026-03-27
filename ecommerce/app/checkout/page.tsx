@@ -62,7 +62,34 @@ const CheckoutPageContent = () => {
     bank_name: string;
     account_number: string;
     account_name: string;
+    company?: string;
   } | null>(null);
+
+  const DEFAULT_COMPANY_KEY = 'terguun_gereg';
+  const SUPPORTED_COMPANY_KEYS = ['terguun_gereg', 'geregesoft'] as const;
+
+  const allowedCompanyKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const item of cartItems) {
+      const company = (item as any)?.product?.company;
+      if (company && (SUPPORTED_COMPANY_KEYS as readonly string[]).includes(company)) {
+        keys.add(company);
+      }
+    }
+    if (keys.size === 0) return [DEFAULT_COMPANY_KEY];
+    return Array.from(keys);
+  }, [cartItems]);
+
+  const preferredBankAccountId = useMemo(() => {
+    for (const item of cartItems) {
+      const id = (item as any)?.product?.bankAccountId;
+      if (id !== undefined && id !== null && String(id) !== '') {
+        const asNumber = Number(id);
+        if (!Number.isNaN(asNumber)) return asNumber;
+      }
+    }
+    return null;
+  }, [cartItems]);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -91,12 +118,22 @@ const CheckoutPageContent = () => {
       try {
         const result = await apiService.getActiveBankAccounts();
         if (result.success && result.data && result.data.length > 0) {
-          // Use the first active bank account
-          const firstBankAccount = result.data[0];
+          // Use the first active bank account that matches the chosen company
+          const matchingAccounts = result.data.filter((acc: any) => {
+            const accCompany = acc.company || DEFAULT_COMPANY_KEY;
+            return allowedCompanyKeys.includes(accCompany);
+          });
+
+          const preferred =
+            preferredBankAccountId != null
+              ? matchingAccounts.find((acc: any) => Number(acc.id) === preferredBankAccountId)
+              : null;
+          const firstBankAccount = (preferred || matchingAccounts[0] || result.data[0]) as any;
           setBankAccount({
             bank_name: firstBankAccount.bank_name,
             account_number: firstBankAccount.account_number,
             account_name: firstBankAccount.account_name,
+            company: firstBankAccount.company,
           });
         }
       } catch (error) {
@@ -106,7 +143,7 @@ const CheckoutPageContent = () => {
     };
 
     fetchBankAccount();
-  }, []);
+  }, [allowedCompanyKeys]);
 
   // Handle re-order redirect with orderId and invoiceId (optional - for future use)
   // Note: Currently re-order handles payment directly, but keeping this for potential redirects
@@ -1260,6 +1297,7 @@ const CheckoutPageContent = () => {
               formatPrice={formatPrice}
               completeOrder={completeOrder}
               setStep={setStep}
+              allowedCompanyKeys={allowedCompanyKeys}
             />
           )}
           {step === 3 && (
