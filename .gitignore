@@ -1,26 +1,39 @@
-# Node
-node_modules/
-npm-debug.log*
-yarn-error.log*
+# Monorepo: ecommerce / task / ecommerce-backoffice — do not commit deps or secrets
 
-# Next / React
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Next.js (ecommerce, ecommerce-backoffice)
 .next/
+out/
+
+# Build / cache
 dist/
 build/
+.turbo/
+.vercel/
 
-# Env files
+# Env & secrets (any subfolder)
 .env
-.env.local
-.env.production
+.env.*
+!.env.example
+!.env*.example
+*.pem
 
 # Logs
 logs/
 *.log
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# OS
+# OS / IDE
 .DS_Store
-
-# IDE
-.vscode/
 .idea/
+.vscode/*
+!.vscode/extensions.json
 
+# Test / coverage
+coverage/
+.nyc_output/
