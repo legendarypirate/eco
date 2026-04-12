@@ -198,58 +198,6 @@ const deductProductStock = async (orderItems) => {
   }
 };
 
-// Helper function to parse address components from shipping_address string
-const parseAddressComponents = (shippingAddress) => {
-  if (!shippingAddress || shippingAddress === 'Ирж авах') {
-    return {
-      city: '',
-      district: '',
-      khoroo: '',
-      address: shippingAddress || ''
-    };
-  }
-
-  const addressParts = shippingAddress.split(',').map(part => part.trim());
-  
-  let city = '';
-  let district = '';
-  let khoroo = '';
-  let address = '';
-
-  // First part is usually the city
-  if (addressParts.length > 0) {
-    city = addressParts[0];
-  }
-
-  // Find district (Дүүрэг: ...)
-  const districtIndex = addressParts.findIndex(part => part.startsWith('Дүүрэг:'));
-  if (districtIndex !== -1) {
-    district = addressParts[districtIndex].replace('Дүүрэг:', '').trim();
-  }
-
-  // Find khoroo (Хороо: ...)
-  const khorooIndex = addressParts.findIndex(part => part.startsWith('Хороо:'));
-  if (khorooIndex !== -1) {
-    khoroo = addressParts[khorooIndex].replace('Хороо:', '').trim();
-  }
-
-  // Everything after district/khoroo is the detailed address
-  const addressStartIndex = Math.max(
-    districtIndex !== -1 ? districtIndex + 1 : 0,
-    khorooIndex !== -1 ? khorooIndex + 1 : 0,
-    1 // At least start from index 1 (after city)
-  );
-  
-  if (addressParts.length > addressStartIndex) {
-    address = addressParts.slice(addressStartIndex).join(', ').trim();
-  } else {
-    // Fallback: if no detailed address found, use the full string minus city/district/khoroo
-    address = shippingAddress;
-  }
-
-  return { city, district, khoroo, address };
-};
-
 // Helper function to extract transaction information (ORDERID, Phone, Name) from QPay invoice
 const extractTransactionInfo = async (invoiceId, order = null) => {
   try {
@@ -310,116 +258,6 @@ const extractTransactionInfo = async (invoiceId, order = null) => {
       ORDERID: order?.order_number || null,
       Phone: order?.phone_number || null,
       Name: order?.customer_name || null
-    };
-  }
-};
-
-// Helper function to call e-chuchu API
-const callChuchuAPI = async (order, options = {}) => {
-  try {
-    // Check if order has delivery address (not pickup)
-    const shippingAddress = options.address || order.shipping_address;
-    if (!shippingAddress || shippingAddress === 'Ирж авах' || shippingAddress.trim() === '') {
-      console.log(`Skipping chuchu API for order ${order.id} - pickup order or no address`);
-      return { success: false, reason: 'pickup_or_no_address' };
-    }
-
-    // Check if order has items
-    if (!order.items || order.items.length === 0) {
-      console.log(`Skipping chuchu API for order ${order.id} - no items`);
-      return { success: false, reason: 'no_items' };
-    }
-
-    // Parse address components
-    const addressComponents = parseAddressComponents(shippingAddress);
-    
-    // Use provided khoroo/district from options, or from order fields, or parse from address
-    const district = options.district || order.district || addressComponents.district || '';
-    const khoroo = options.khoroo || order.khoroo || addressComponents.khoroo || '';
-    const detailedAddress = addressComponents.address || shippingAddress;
-
-    // Prepare parcel info for chuchu
-    const parcelInfo = order.items.map(item => 
-      `${item.name_mn || item.name} x${item.quantity}`
-    ).join(", ");
-
-    const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
-
-    // Build full address string with district and khoroo
-    const fullAddressParts = [];
-    if (addressComponents.city) fullAddressParts.push(addressComponents.city);
-    if (district) fullAddressParts.push(`Дүүрэг: ${district}`);
-    if (khoroo) fullAddressParts.push(`Хороо: ${khoroo}`);
-    if (detailedAddress) fullAddressParts.push(detailedAddress);
-    const fullAddress = fullAddressParts.join(', ');
-
-    // Parse invoice_data to extract invoice fields
-    let invoiceNumber = null;
-    let invoiceDate = null;
-    let customerRegister = null;
-    let customerEmail = null;
-
-    if (order.invoice_data) {
-      try {
-        const invoiceData = typeof order.invoice_data === 'string' 
-          ? JSON.parse(order.invoice_data) 
-          : order.invoice_data;
-        
-        invoiceNumber = invoiceData.invoiceNumber || invoiceData.invoice_number || null;
-        invoiceDate = invoiceData.invoiceDate || invoiceData.invoice_date || null;
-        customerRegister = invoiceData.customerRegister || invoiceData.customer_register || null;
-        customerEmail = invoiceData.customerEmail || invoiceData.customer_email || null;
-      } catch (e) {
-        console.warn('Error parsing invoice_data for chuchu API:', e);
-      }
-    }
-
-    // Also check options for invoice fields (in case they're passed directly)
-    if (options.invoice_number) invoiceNumber = options.invoice_number;
-    if (options.invoice_date) invoiceDate = options.invoice_date;
-    if (options.customer_register) customerRegister = options.customer_register;
-    if (options.customer_email) customerEmail = options.customer_email;
-
-    // Call chuchu API
-    const chuchuUrl = "https://e-chuchu.mn/api/v1/tsaas/delivery/create";
-    const chuchuData = {
-      order_code: order.order_number,
-      receivername: order.customer_name || options.phone || order.phone_number,
-      parcel_info: parcelInfo,
-      phone: options.phone || order.phone_number || "",
-      phone2: "",
-      address: fullAddress || shippingAddress,
-      comment: options.comment || khoroo || "",
-      number: totalItems,
-      price: order.grand_total.toString(),
-      track: order.id.toString(),
-      // Invoice fields
-      invoice_number: invoiceNumber || "",
-      invoice_date: invoiceDate || "",
-      customer_register: customerRegister || "",
-      customer_email: customerEmail || ""
-    };
-
-    console.log('Calling e-chuchu API for order:', order.order_number, chuchuData);
-    
-    const chuchuResponse = await axios.post(chuchuUrl, chuchuData, {
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      timeout: 10000 // 10 second timeout
-    });
-
-    console.log('e-chuchu API response for order', order.order_number, ':', chuchuResponse.data);
-    
-    return {
-      success: true,
-      data: chuchuResponse.data
-    };
-  } catch (error) {
-    console.error('e-chuchu API error for order', order.id, ':', error.response?.data || error.message);
-    return {
-      success: false,
-      error: error.response?.data || error.message
     };
   }
 };
@@ -765,7 +603,7 @@ exports.checkPaymentStatus = async (req, res) => {
       });
       order.payment_status = 1;
 
-      // Reload order with items for stock deduction and chuchu API call
+      // Reload order with items for stock deduction and address save
       const orderWithItems = await Order.findOne({
         where: { id: order.id },
         include: [{ model: OrderItem, as: 'items' }]
@@ -781,34 +619,8 @@ exports.checkPaymentStatus = async (req, res) => {
         }
       }
 
-      if (orderWithItems && orderWithItems.items && orderWithItems.items.length > 0) {
-        // Call e-chuchu API for delivery orders after payment success
-        // Only skip if it's explicitly a pickup order or address is missing
-        const shippingAddress = orderWithItems.shipping_address || '';
-        if (!shippingAddress || shippingAddress === 'Ирж авах' || shippingAddress.trim() === '') {
-          console.log(`Order ${order.id} is pickup order or has no address, skipping chuchu API. Will try again when invoice is downloaded.`);
-        } else {
-          // Call chuchu API with the address from the order
-          const chuchuResult = await callChuchuAPI(orderWithItems, {
-            address: shippingAddress,
-            district: orderWithItems.district,
-            khoroo: orderWithItems.khoroo,
-            phone: orderWithItems.phone_number || '',
-            comment: ""
-          });
-          if (chuchuResult.success) {
-            console.log(`e-chuchu API called successfully for order ${order.id} after QPay payment`);
-          } else {
-            // Log warning but don't fail the payment - chuchu API call is not critical
-            // It will be retried when invoice is downloaded
-            console.warn(`e-chuchu API call failed for order ${order.id}:`, chuchuResult.error || chuchuResult.reason);
-          }
-        }
-      } else {
-        console.warn(`Order ${order.id} has no items, skipping chuchu API`);
-      }
-
-        // Save address when QPay payment is successful (for authenticated users, non-pickup orders)
+      // Save address when QPay payment is successful (for authenticated users, non-pickup orders)
+      if (orderWithItems) {
         saveAddressFromOrder(orderWithItems).then(result => {
           if (result.success) {
             if (result.isDuplicate) {
@@ -817,7 +629,6 @@ exports.checkPaymentStatus = async (req, res) => {
               console.log('Address saved successfully when QPay payment succeeded for order:', order.order_number);
             }
           } else {
-            // Only log if it's not a guest user or pickup order (expected cases)
             if (result.reason !== 'guest_user' && result.reason !== 'pickup_order') {
               console.warn('Failed to save address when QPay payment succeeded for order:', order.order_number, result.reason || result.error);
             }
@@ -825,6 +636,7 @@ exports.checkPaymentStatus = async (req, res) => {
         }).catch(err => {
           console.error('Error saving address when QPay payment succeeded:', err);
         });
+      }
     }
 
     // Convert order to plain object and ensure qr_image is not included
@@ -893,7 +705,7 @@ exports.paymentWebhook = async (req, res) => {
       });
       console.log(`Order ${order.id} marked as paid via webhook`);
 
-      // Reload order with items for stock deduction and chuchu API call
+      // Reload order with items for stock deduction and address save
       const orderWithItems = await Order.findOne({
         where: { id: order.id },
         include: [{ model: OrderItem, as: 'items' }]
@@ -909,34 +721,8 @@ exports.paymentWebhook = async (req, res) => {
         }
       }
 
-      if (orderWithItems && orderWithItems.items && orderWithItems.items.length > 0) {
-        // Call e-chuchu API for delivery orders after payment success via webhook
-        // Only skip if it's explicitly a pickup order or address is missing
-        const shippingAddress = orderWithItems.shipping_address || '';
-        if (!shippingAddress || shippingAddress === 'Ирж авах' || shippingAddress.trim() === '') {
-          console.log(`Order ${order.id} is pickup order or has no address, skipping chuchu API. Will try again when invoice is downloaded.`);
-        } else {
-          // Call chuchu API with the address from the order
-          const chuchuResult = await callChuchuAPI(orderWithItems, {
-            address: shippingAddress,
-            district: orderWithItems.district,
-            khoroo: orderWithItems.khoroo,
-            phone: orderWithItems.phone_number || '',
-            comment: ""
-          });
-          if (chuchuResult.success) {
-            console.log(`e-chuchu API called successfully for order ${order.id} via QPay webhook`);
-          } else {
-            // Log warning but don't fail the payment - chuchu API call is not critical
-            // It will be retried when invoice is downloaded
-            console.warn(`e-chuchu API call failed for order ${order.id} via webhook:`, chuchuResult.error || chuchuResult.reason);
-          }
-        }
-      } else {
-        console.warn(`Order ${order.id} has no items, skipping chuchu API`);
-      }
-
-        // Save address when QPay payment is successful via webhook (for authenticated users, non-pickup orders)
+      // Save address when QPay payment is successful via webhook (for authenticated users, non-pickup orders)
+      if (orderWithItems) {
         saveAddressFromOrder(orderWithItems).then(result => {
           if (result.success) {
             if (result.isDuplicate) {
@@ -945,7 +731,6 @@ exports.paymentWebhook = async (req, res) => {
               console.log('Address saved successfully when QPay payment succeeded via webhook for order:', order.order_number);
             }
           } else {
-            // Only log if it's not a guest user or pickup order (expected cases)
             if (result.reason !== 'guest_user' && result.reason !== 'pickup_order') {
               console.warn('Failed to save address when QPay payment succeeded via webhook for order:', order.order_number, result.reason || result.error);
             }
@@ -953,6 +738,7 @@ exports.paymentWebhook = async (req, res) => {
         }).catch(err => {
           console.error('Error saving address when QPay payment succeeded via webhook:', err);
         });
+      }
     } else if (payment_status === 'CANCELLED' && order.payment_status !== 2) {
       await order.update({ 
         payment_status: 2, // 2 = Failed/Cancelled

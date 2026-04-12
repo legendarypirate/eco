@@ -5,7 +5,6 @@ const Address = db.addresses;
 const Coupon = db.coupons;
 const CouponUsage = db.coupon_usage;
 const { Op } = require("sequelize");
-const axios = require("axios"); // HTTP client for API calls
 const PDFDocument = require("pdfkit");
 const fs = require("fs");
 const path = require("path");
@@ -147,202 +146,6 @@ const saveAddressFromOrder = async (order) => {
     return { 
       success: false, 
       error: error.message 
-    };
-  }
-};
-
-// Helper function to parse address components from shipping_address string
-const parseAddressComponents = (shippingAddress) => {
-  if (!shippingAddress || shippingAddress === 'Ирж авах') {
-    return {
-      city: '',
-      district: '',
-      khoroo: '',
-      address: shippingAddress || ''
-    };
-  }
-
-  const addressParts = shippingAddress.split(',').map(part => part.trim());
-  
-  let city = '';
-  let district = '';
-  let khoroo = '';
-  let address = '';
-
-  // First part is usually the city
-  if (addressParts.length > 0) {
-    city = addressParts[0];
-  }
-
-  // Find district (Дүүрэг: ...)
-  const districtIndex = addressParts.findIndex(part => part.startsWith('Дүүрэг:'));
-  if (districtIndex !== -1) {
-    district = addressParts[districtIndex].replace('Дүүрэг:', '').trim();
-  }
-
-  // Find khoroo (Хороо: ...)
-  const khorooIndex = addressParts.findIndex(part => part.startsWith('Хороо:'));
-  if (khorooIndex !== -1) {
-    khoroo = addressParts[khorooIndex].replace('Хороо:', '').trim();
-  }
-
-  // Everything after district/khoroo is the detailed address
-  const addressStartIndex = Math.max(
-    districtIndex !== -1 ? districtIndex + 1 : 0,
-    khorooIndex !== -1 ? khorooIndex + 1 : 0,
-    1 // At least start from index 1 (after city)
-  );
-  
-  if (addressParts.length > addressStartIndex) {
-    address = addressParts.slice(addressStartIndex).join(', ').trim();
-  } else {
-    // Fallback: if no detailed address found, use the full string minus city/district/khoroo
-    address = shippingAddress;
-  }
-
-  return { city, district, khoroo, address };
-};
-
-// Helper function to call e-chuchu API
-const callChuchuAPI = async (order, options = {}) => {
-  try {
-    // Get shipping address (use provided address or order address, default to "Ирж авах" if empty)
-    const shippingAddress = options.address || order.shipping_address || 'Ирж авах';
-    
-    // Check if order has items
-    if (!order.items || order.items.length === 0) {
-      console.log(`Skipping chuchu API for order ${order.id} - no items`);
-      return { success: false, reason: 'no_items' };
-    }
-
-    // Parse address components
-    const addressComponents = parseAddressComponents(shippingAddress);
-    
-    // Use provided khoroo/district from options, or from order fields, or parse from address
-    const district = options.district || order.district || addressComponents.district || '';
-    const khoroo = options.khoroo || order.khoroo || addressComponents.khoroo || '';
-    const detailedAddress = addressComponents.address || shippingAddress;
-
-    // Prepare parcel info for chuchu
-    const parcelInfo = order.items.map(item => 
-      `${item.name_mn || item.name} x${item.quantity}`
-    ).join(", ");
-
-    const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
-
-    // Build full address string with district and khoroo
-    const fullAddressParts = [];
-    if (addressComponents.city) fullAddressParts.push(addressComponents.city);
-    if (district) fullAddressParts.push(`Дүүрэг: ${district}`);
-    if (khoroo) fullAddressParts.push(`Хороо: ${khoroo}`);
-    if (detailedAddress) fullAddressParts.push(detailedAddress);
-    const fullAddress = fullAddressParts.join(', ');
-
-    // Parse invoice_data to extract invoice fields
-    let invoiceNumber = null;
-    let invoiceDate = null;
-    let customerRegister = null;
-    let customerEmail = null;
-
-    // DEBUG: Log what we're receiving
-    console.log('=== DEBUG callChuchuAPI for order:', order.order_number || order.id, '===');
-    console.log('order.invoice_data type:', typeof order.invoice_data);
-    console.log('order.invoice_data value:', order.invoice_data);
-    console.log('options:', JSON.stringify(options, null, 2));
-
-    if (order.invoice_data) {
-      try {
-        const invoiceData = typeof order.invoice_data === 'string' 
-          ? JSON.parse(order.invoice_data) 
-          : order.invoice_data;
-        
-        console.log('Parsed invoice_data:', JSON.stringify(invoiceData, null, 2));
-        
-        invoiceNumber = invoiceData.invoiceNumber || invoiceData.invoice_number || null;
-        invoiceDate = invoiceData.invoiceDate || invoiceData.invoice_date || null;
-        // Check multiple possible field names for register and email
-        customerRegister = invoiceData.customerRegister || invoiceData.customer_register || invoiceData.register || null;
-        customerEmail = invoiceData.customerEmail || invoiceData.customer_email || invoiceData.email || null;
-        
-        console.log('Extracted from invoice_data:', {
-          invoiceNumber,
-          invoiceDate,
-          customerRegister,
-          customerEmail
-        });
-      } catch (e) {
-        console.warn('Error parsing invoice_data for chuchu API:', e);
-        console.warn('Raw invoice_data that failed to parse:', order.invoice_data);
-      }
-    } else {
-      console.log('No invoice_data found in order');
-    }
-
-    // Also check options for invoice fields (in case they're passed directly)
-    if (options.invoice_number) {
-      console.log('Overriding invoice_number from options:', options.invoice_number);
-      invoiceNumber = options.invoice_number;
-    }
-    if (options.invoice_date) {
-      console.log('Overriding invoice_date from options:', options.invoice_date);
-      invoiceDate = options.invoice_date;
-    }
-    if (options.customer_register) {
-      console.log('Overriding customer_register from options:', options.customer_register);
-      customerRegister = options.customer_register;
-    }
-    if (options.customer_email) {
-      console.log('Overriding customer_email from options:', options.customer_email);
-      customerEmail = options.customer_email;
-    }
-
-    console.log('Final invoice field values before sending to chuchu:', {
-      invoice_number: invoiceNumber,
-      invoice_date: invoiceDate,
-      customer_register: customerRegister,
-      customer_email: customerEmail
-    });
-
-    // Call chuchu API
-    const chuchuUrl = "https://e-chuchu.mn/api/v1/tsaas/delivery/create";
-    const chuchuData = {
-      order_code: order.order_number,
-      receivername: order.customer_name || options.phone || order.phone_number,
-      parcel_info: parcelInfo,
-      phone: options.phone || order.phone_number || "",
-      phone2: options.phone2 || "",
-      address: fullAddress || shippingAddress,
-      comment: options.comment || khoroo || "",
-      number: totalItems,
-      price: order.grand_total.toString(),
-      track: order.id.toString(),
-      // Invoice fields
-      invoice_number: invoiceNumber || "",
-      invoice_date: invoiceDate || "",
-      customer_register: customerRegister || "",
-      customer_email: customerEmail || ""
-    };
-
-    console.log('Calling e-chuchu API for order:', order.order_number, chuchuData);
-    
-    const chuchuResponse = await axios.post(chuchuUrl, chuchuData, {
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      timeout: 10000 // 10 second timeout
-    });
-
-    console.log('e-chuchu API response for order', order.order_number, ':', chuchuResponse.data);
-    
-    return {
-      success: true,
-      data: chuchuResponse.data
-    };
-  } catch (error) {
-    console.error('e-chuchu API error for order', order.id, ':', error.response?.data || error.message);
-    return {
-      success: false,
-      error: error.response?.data || error.message
     };
   }
 };
@@ -1005,8 +808,8 @@ exports.findAll = (req, res) => {
     });
 };
 
-// Create invoice and call chuchu API
-exports.createInvoiceWithChuchu = async (req, res) => {
+// Create invoice (persist address / invoice_data on order)
+exports.createInvoice = async (req, res) => {
   try {
     const { orderId } = req.params;
     const { address, district, khoroo, phone, invoiceData } = req.body;
@@ -1074,52 +877,6 @@ exports.createInvoiceWithChuchu = async (req, res) => {
       }
     });
 
-    // Call e-chuchu API when invoice is created (with address and phone from request)
-    if (updatedOrder) {
-      // Parse invoice_data to extract invoice fields
-      let invoiceNumber = null;
-      let invoiceDate = null;
-      let customerRegister = null;
-      let customerEmail = null;
-      
-      if (updatedOrder.invoice_data) {
-        try {
-          const parsedInvoiceData = typeof updatedOrder.invoice_data === 'string' 
-            ? JSON.parse(updatedOrder.invoice_data) 
-            : updatedOrder.invoice_data;
-          
-          invoiceNumber = parsedInvoiceData.invoiceNumber || parsedInvoiceData.invoice_number || updatedOrder.order_number || null;
-          invoiceDate = parsedInvoiceData.invoiceDate || parsedInvoiceData.invoice_date || null;
-          customerRegister = parsedInvoiceData.customerRegister || parsedInvoiceData.customer_register || parsedInvoiceData.register || null;
-          customerEmail = parsedInvoiceData.customerEmail || parsedInvoiceData.customer_email || parsedInvoiceData.email || null;
-        } catch (e) {
-          console.warn('Error parsing invoice_data in createInvoiceWithChuchu:', e);
-        }
-      }
-      
-      const chuchuOptions = {
-        address: address || updatedOrder.shipping_address,
-        district: district !== undefined ? district : updatedOrder.district,
-        khoroo: khoroo !== undefined ? khoroo : updatedOrder.khoroo,
-        phone: phone || updatedOrder.phone_number,
-        comment: khoroo || "",
-        invoice_number: invoiceNumber,
-        invoice_date: invoiceDate,
-        customer_register: customerRegister,
-        customer_email: customerEmail
-      };
-      
-      callChuchuAPI(updatedOrder, chuchuOptions).then(result => {
-        if (result.success) {
-          console.log('e-chuchu record created successfully when invoice was created for order:', updatedOrder.order_number);
-        } else {
-          console.warn('e-chuchu API call failed when invoice was created for order:', updatedOrder.order_number, result.error || result.reason);
-        }
-      }).catch(err => {
-        console.error('Error calling e-chuchu API when invoice was created:', err);
-      });
-    }
-
     // Save address when invoice is created (PDF will be downloaded client-side right after)
     // Call asynchronously so it doesn't block the response
     if (updatedOrder) {
@@ -1148,7 +905,7 @@ exports.createInvoiceWithChuchu = async (req, res) => {
       order: cleanedOrder
     });
   } catch (error) {
-    console.error("Create invoice with chuchu error:", error);
+    console.error("Create invoice error:", error);
     res.status(500).json({
       success: false,
       message: error.message || "Нэхэмжлэх үүсгэхэд алдаа гарлаа"
@@ -1336,50 +1093,6 @@ exports.generateInvoicePDF = async (req, res) => {
     doc.text('Нийт дүн:', 350, startY);
     doc.text(order.grand_total.toLocaleString() + '₮', 450, startY);
 
-    // Call e-chuchu API when PDF is downloaded (for all orders including pickup)
-    // Call asynchronously so it doesn't block PDF generation
-    // Use order data which should already have address and phone from invoice creation
-    // Extract invoice fields from invoice_data
-    let invoiceNumber = null;
-    let invoiceDate = null;
-    let customerRegister = null;
-    let customerEmail = null;
-    
-    if (order.invoice_data) {
-      try {
-        const invoiceData = typeof order.invoice_data === 'string' 
-          ? JSON.parse(order.invoice_data) 
-          : order.invoice_data;
-        
-        invoiceNumber = invoiceData.invoiceNumber || invoiceData.invoice_number || order.order_number || null;
-        invoiceDate = invoiceData.invoiceDate || invoiceData.invoice_date || null;
-        customerRegister = invoiceData.customerRegister || invoiceData.customer_register || invoiceData.register || null;
-        customerEmail = invoiceData.customerEmail || invoiceData.customer_email || invoiceData.email || null;
-      } catch (e) {
-        console.warn('Error parsing invoice_data in generateInvoicePDF:', e);
-      }
-    }
-    
-    callChuchuAPI(order, {
-      address: order.shipping_address,
-      district: order.district,
-      khoroo: order.khoroo,
-      phone: order.phone_number,
-      comment: "",
-      invoice_number: invoiceNumber,
-      invoice_date: invoiceDate,
-      customer_register: customerRegister,
-      customer_email: customerEmail
-    }).then(result => {
-      if (result.success) {
-        console.log('e-chuchu record created successfully when PDF was downloaded for order:', order.order_number);
-      } else {
-        console.warn('e-chuchu API call failed when PDF was downloaded for order:', order.order_number, result.error || result.reason);
-      }
-    }).catch(err => {
-      console.error('Error calling e-chuchu API when PDF was downloaded:', err);
-    });
-
     // Save address when PDF is downloaded (for authenticated users, non-pickup orders)
     // Call asynchronously so it doesn't block PDF generation
     saveAddressFromOrder(order).then(result => {
@@ -1407,110 +1120,6 @@ exports.generateInvoicePDF = async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message || "PDF үүсгэхэд алдаа гарлаа"
-    });
-  }
-};
-
-// Call chuchu API for delivery (used after payment success)
-exports.createChuchuDelivery = async (req, res) => {
-  try {
-    const { orderId } = req.params;
-
-    // Find the order (exclude qr_image to save memory)
-    const order = await Order.findOne({
-      where: { id: orderId },
-      include: [{ model: OrderItem, as: "items" }],
-      attributes: {
-        exclude: ['qr_image'] // Exclude large qr_image from response to save memory
-      }
-    });
-
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: "Захиалга олдсонгүй"
-      });
-    }
-
-    // Check if order has items
-    if (!order.items || order.items.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Захиалгад бүтээгдэхүүн байхгүй байна"
-      });
-    }
-
-    // Extract invoice fields from invoice_data
-    let invoiceNumber = null;
-    let invoiceDate = null;
-    let customerRegister = null;
-    let customerEmail = null;
-    
-    if (order.invoice_data) {
-      try {
-        const parsedInvoiceData = typeof order.invoice_data === 'string' 
-          ? JSON.parse(order.invoice_data) 
-          : order.invoice_data;
-        
-        invoiceNumber = parsedInvoiceData.invoiceNumber || parsedInvoiceData.invoice_number || order.order_number || null;
-        invoiceDate = parsedInvoiceData.invoiceDate || parsedInvoiceData.invoice_date || null;
-        // Check multiple possible field names for register and email
-        customerRegister = parsedInvoiceData.customerRegister || parsedInvoiceData.customer_register || parsedInvoiceData.register || null;
-        customerEmail = parsedInvoiceData.customerEmail || parsedInvoiceData.customer_email || parsedInvoiceData.email || null;
-        
-        console.log('createChuchuDelivery - Extracted invoice fields:', {
-          invoiceNumber,
-          invoiceDate,
-          customerRegister,
-          customerEmail
-        });
-      } catch (e) {
-        console.warn('Error parsing invoice_data in createChuchuDelivery:', e);
-      }
-    }
-
-    // Use the helper function to call e-chuchu API (for all orders including pickup)
-    const chuchuResult = await callChuchuAPI(order, {
-      address: order.shipping_address,
-      district: order.district,
-      khoroo: order.khoroo,
-      phone: order.phone_number,
-      comment: "",
-      invoice_number: invoiceNumber,
-      invoice_date: invoiceDate,
-      customer_register: customerRegister,
-      customer_email: customerEmail
-    });
-
-    if (!chuchuResult.success) {
-      // Don't return error for pickup orders or no items (expected cases)
-      if (chuchuResult.reason === 'pickup_or_no_address' || chuchuResult.reason === 'no_items') {
-        return res.status(400).json({
-          success: false,
-          message: chuchuResult.reason === 'pickup_or_no_address' 
-            ? "Ирж авах захиалга эсвэл хаяг байхгүй" 
-            : "Захиалгад бүтээгдэхүүн байхгүй байна",
-          reason: chuchuResult.reason
-        });
-      }
-      
-      return res.status(500).json({
-        success: false,
-        message: "Хүргэлтийн мэдээлэл илгээхэд алдаа гарлаа",
-        error: chuchuResult.error || chuchuResult.reason
-      });
-    }
-
-    res.json({
-      success: true,
-      message: "Хүргэлтийн мэдээлэл амжилттай илгээгдлээ",
-      chuchuResponse: chuchuResult.data
-    });
-  } catch (error) {
-    console.error("Create chuchu delivery error:", error);
-    res.status(500).json({
-      success: false,
-      message: error.message || "Хүргэлтийн мэдээлэл илгээхэд алдаа гарлаа"
     });
   }
 };
