@@ -34,7 +34,6 @@ const CheckoutPageContent = () => {
   const [checkInterval, setCheckInterval] = useState<ReturnType<typeof setInterval> | null>(null);
   const [orderNumber, setOrderNumber] = useState('');
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
-  const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [latestFormDataForInvoice, setLatestFormDataForInvoice] = useState<any>(null);
   
@@ -157,7 +156,6 @@ const CheckoutPageContent = () => {
       const loadReOrderInvoice = async () => {
         try {
           setIsProcessing(true);
-          setCurrentOrderId(orderIdParam);
           setInvoiceId(invoiceIdParam);
           
           // Fetch invoice details
@@ -540,7 +538,6 @@ const CheckoutPageContent = () => {
       }
 
       const createdOrder = orderResult.order;
-      setCurrentOrderId(createdOrder.id);
       
       if (createdOrder.order_number) {
         setOrderNumber(createdOrder.order_number);
@@ -764,29 +761,6 @@ const CheckoutPageContent = () => {
         total,
       });
       
-      if (currentOrderId) {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-        try {
-          const chuchuResponse = await fetch(`${API_URL}/order/${currentOrderId}/delivery/chuchu`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(isAuthenticated && { 'Authorization': `Bearer ${localStorage.getItem('token')}` }),
-            },
-          });
-          
-          if (chuchuResponse.ok) {
-            const chuchuResult = await chuchuResponse.json();
-            console.log('Chuchu API called successfully after payment:', chuchuResult);
-          } else {
-            const errorData = await chuchuResponse.json().catch(() => ({}));
-            console.warn('Chuchu API call failed after payment:', errorData);
-          }
-        } catch (chuchuError) {
-          console.error('Chuchu API error after payment:', chuchuError);
-        }
-      }
-      
       clearCart();
       setStep(3);
       
@@ -802,7 +776,7 @@ const CheckoutPageContent = () => {
       clearCart();
       setStep(3);
     }
-  }, [currentOrderId, clearCart, isAuthenticated, subtotal, shipping, couponDiscount, total]);
+  }, [clearCart, subtotal, shipping, couponDiscount, total]);
 
   const startPaymentCheck = useCallback((invoiceId: string) => {
     if (checkInterval) clearInterval(checkInterval);
@@ -1097,7 +1071,7 @@ const CheckoutPageContent = () => {
         invoiceDate: invoiceDateStr,
       };
 
-      const invoiceResponse = await fetch(`${API_URL}/order/${createdOrder.id}/invoice/chuchu`, {
+      const invoiceResponse = await fetch(`${API_URL}/order/${createdOrder.id}/invoice`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
