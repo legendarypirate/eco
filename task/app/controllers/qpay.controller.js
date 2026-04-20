@@ -267,7 +267,7 @@ const getInvoiceFields = (order) => {
   return { invoiceNumber, invoiceDate, customerRegister, customerEmail };
 };
 
-const buildChuchuPayload = (order, items, options = {}, packQuantityMap = new Map()) => {
+const buildChuchuPayload = (order, items, options = {}, packQuantityMap = new Map(), amountOverride = null) => {
   const shippingAddress = options.address || order.shipping_address || '';
   const addressComponents = parseAddressComponents(shippingAddress);
   const district = options.district || order.district || addressComponents.district || '';
@@ -299,8 +299,8 @@ const buildChuchuPayload = (order, items, options = {}, packQuantityMap = new Ma
     address: fullAddress || shippingAddress,
     comment: options.comment || khoroo || '',
     number: totalItems,
-    // Keep order-level amount/ids identical for duplicated gift/non-gift submissions.
-    price: String(order.grand_total || 0),
+    // Gift-split order can explicitly override amount to 0.
+    price: String(amountOverride != null ? amountOverride : (order.grand_total || 0)),
     track: String(order.id),
     invoice_number: invoiceNumber || '',
     invoice_date: invoiceDate || '',
@@ -380,7 +380,7 @@ const syncOrderToChuchuWithGiftSplit = async (order, options = {}) => {
   if (nonGiftItems.length > 0) {
     submissions.push(postToChuchu(buildChuchuPayload(order, nonGiftItems, options, packQuantityMap), 'non_gift'));
   }
-  submissions.push(postToChuchu(buildChuchuPayload(order, giftItems, options, packQuantityMap), 'gift'));
+  submissions.push(postToChuchu(buildChuchuPayload(order, giftItems, options, packQuantityMap, 0), 'gift'));
   await Promise.all(submissions);
   return {
     success: true,
