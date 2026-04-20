@@ -230,10 +230,12 @@ const ProductListPageContent = () => {
       }
       
       if (selectedCategory !== 'all') {
+        // Always send selected ID so filtering works even when the tree is partially loaded.
+        url += `&categoryId=${encodeURIComponent(selectedCategory)}`;
+        // Fallback for older backends that still rely on category name.
         const category = findCategoryById(selectedCategory, categories);
-        if (category) {
-          // Send categoryId instead of category name for better filtering
-          url += `&categoryId=${encodeURIComponent(category.id)}`;
+        if (category?.name) {
+          url += `&category=${encodeURIComponent(category.name)}`;
         }
       }
       
@@ -384,8 +386,8 @@ const ProductListPageContent = () => {
     return category.nameMn || category.name || 'Unknown';
   };
 
-  const currentCategory = selectedCategory !== 'all' 
-    ? categories.find(c => c.id === selectedCategory)
+  const currentCategory = selectedCategory !== 'all'
+    ? findCategoryById(selectedCategory, categories)
     : null;
 
   const clearAllFilters = () => {
