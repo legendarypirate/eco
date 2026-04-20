@@ -9,6 +9,7 @@ const axios = require('axios');
 const QPAY_LOGIN = process.env.QPAY_LOGIN || 'KONO';
 const QPAY_PASSWORD = process.env.QPAY_PASSWORD || '8zcSjp5u';
 const QPAY_BASE_URL = 'https://merchant.qpay.mn/v2';
+const CHUCHU_URL = process.env.CHUCHU_DELIVERY_URL || 'https://e-chuchu.mn/api/v1/tsaas/delivery/create';
 
 // Helper function to save address from order (only for authenticated users, non-pickup orders)
 const saveAddressFromOrder = async (order) => {
@@ -196,6 +197,186 @@ const deductProductStock = async (orderItems) => {
       error: error.message
     };
   }
+};
+
+// Parse a human-readable shipping address into parts used by Chuchu payload.
+const parseAddressComponents = (shippingAddress) => {
+  if (!shippingAddress || shippingAddress === 'Ирж авах') {
+    return {
+      city: '',
+      district: '',
+      khoroo: '',
+      address: shippingAddress || ''
+    };
+  }
+
+  const addressParts = shippingAddress.split(',').map((part) => part.trim());
+  let city = '';
+  let district = '';
+  let khoroo = '';
+  let address = '';
+
+  if (addressParts.length > 0) city = addressParts[0];
+
+  const districtIndex = addressParts.findIndex((part) => part.startsWith('Дүүрэг:'));
+  if (districtIndex !== -1) {
+    district = addressParts[districtIndex].replace('Дүүрэг:', '').trim();
+  }
+
+  const khorooIndex = addressParts.findIndex((part) => part.startsWith('Хороо:'));
+  if (khorooIndex !== -1) {
+    khoroo = addressParts[khorooIndex].replace('Хороо:', '').trim();
+  }
+
+  const addressStartIndex = Math.max(
+    districtIndex !== -1 ? districtIndex + 1 : 0,
+    khorooIndex !== -1 ? khorooIndex + 1 : 0,
+    1
+  );
+  if (addressParts.length > addressStartIndex) {
+    address = addressParts.slice(addressStartIndex).join(', ').trim();
+  } else {
+    address = shippingAddress;
+  }
+
+  return { city, district, khoroo, address };
+};
+
+const getInvoiceFields = (order) => {
+  let invoiceNumber = null;
+  let invoiceDate = null;
+  let customerRegister = null;
+  let customerEmail = null;
+
+  if (order?.invoice_data) {
+    try {
+      const invoiceData = typeof order.invoice_data === 'string'
+        ? JSON.parse(order.invoice_data)
+        : order.invoice_data;
+      invoiceNumber = invoiceData?.invoiceNumber || invoiceData?.invoice_number || null;
+      invoiceDate = invoiceData?.invoiceDate || invoiceData?.invoice_date || null;
+      customerRegister =
+        invoiceData?.customerRegister || invoiceData?.customer_register || invoiceData?.register || null;
+      customerEmail =
+        invoiceData?.customerEmail || invoiceData?.customer_email || invoiceData?.email || null;
+    } catch (e) {
+      console.warn('Failed to parse invoice_data for chuchu:', e.message);
+    }
+  }
+
+  return { invoiceNumber, invoiceDate, customerRegister, customerEmail };
+};
+
+const buildChuchuPayload = (order, items, options = {}) => {
+  const shippingAddress = options.address || order.shipping_address || '';
+  const addressComponents = parseAddressComponents(shippingAddress);
+  const district = options.district || order.district || addressComponents.district || '';
+  const khoroo = options.khoroo || order.khoroo || addressComponents.khoroo || '';
+  const detailedAddress = addressComponents.address || shippingAddress;
+
+  const fullAddressParts = [];
+  if (addressComponents.city) fullAddressParts.push(addressComponents.city);
+  if (district) fullAddressParts.push(`Дүүрэг: ${district}`);
+  if (khoroo) fullAddressParts.push(`Хороо: ${khoroo}`);
+  if (detailedAddress) fullAddressParts.push(detailedAddress);
+  const fullAddress = fullAddressParts.join(', ');
+
+  const parcelInfo = items.map((item) => `${item.name_mn || item.name} x${item.quantity}`).join(', ');
+  const totalItems = items.reduce((sum, item) => sum + (parseInt(item.quantity, 10) || 0), 0);
+  const { invoiceNumber, invoiceDate, customerRegister, customerEmail } = getInvoiceFields(order);
+
+  return {
+    order_code: order.order_number,
+    receivername: order.customer_name || options.phone || order.phone_number || '',
+    parcel_info: parcelInfo,
+    phone: options.phone || order.phone_number || '',
+    phone2: options.phone2 || '',
+    address: fullAddress || shippingAddress,
+    comment: options.comment || khoroo || '',
+    number: totalItems,
+    // Keep order-level amount/ids identical for duplicated gift/non-gift submissions.
+    price: String(order.grand_total || 0),
+    track: String(order.id),
+    invoice_number: invoiceNumber || '',
+    invoice_date: invoiceDate || '',
+    customer_register: customerRegister || '',
+    customer_email: customerEmail || ''
+  };
+};
+
+const postToChuchu = async (payload, tag) => {
+  const response = await axios.post(CHUCHU_URL, payload, {
+    headers: { 'Content-Type': 'application/json' },
+    timeout: 10000
+  });
+  console.log(`Chuchu API success [${tag}]`, response.data);
+  return response.data;
+};
+
+const splitItemsByGift = async (items) => {
+  if (!Array.isArray(items) || items.length === 0) {
+    return { giftItems: [], nonGiftItems: [] };
+  }
+
+  const productIds = [...new Set(
+    items
+      .map((item) => item.product_id)
+      .filter((id) => id !== null && id !== undefined && id !== '')
+  )];
+
+  const products = productIds.length
+    ? await Product.findAll({
+      where: { id: productIds },
+      attributes: ['id', 'isGift']
+    })
+    : [];
+
+  const giftMap = new Map(products.map((p) => [String(p.id), Boolean(p.isGift)]));
+  const giftItems = [];
+  const nonGiftItems = [];
+
+  for (const item of items) {
+    if (giftMap.get(String(item.product_id)) === true) {
+      giftItems.push(item);
+    } else {
+      nonGiftItems.push(item);
+    }
+  }
+
+  return { giftItems, nonGiftItems };
+};
+
+const syncOrderToChuchuWithGiftSplit = async (order, options = {}) => {
+  const shippingAddress = order?.shipping_address || '';
+  if (!shippingAddress || shippingAddress === 'Ирж авах' || shippingAddress.trim() === '') {
+    return { skipped: true, reason: 'pickup_or_missing_address' };
+  }
+  if (!order?.items || order.items.length === 0) {
+    return { skipped: true, reason: 'no_items' };
+  }
+
+  const { giftItems, nonGiftItems } = await splitItemsByGift(order.items);
+
+  // No gift items => keep original single-order behavior.
+  if (giftItems.length === 0) {
+    const payload = buildChuchuPayload(order, order.items, options);
+    await postToChuchu(payload, 'single');
+    return { success: true, mode: 'single' };
+  }
+
+  // Gift items present => duplicate submission with same order metadata, separated items only.
+  const submissions = [];
+  if (nonGiftItems.length > 0) {
+    submissions.push(postToChuchu(buildChuchuPayload(order, nonGiftItems, options), 'non_gift'));
+  }
+  submissions.push(postToChuchu(buildChuchuPayload(order, giftItems, options), 'gift'));
+  await Promise.all(submissions);
+  return {
+    success: true,
+    mode: 'split',
+    nonGiftCount: nonGiftItems.length,
+    giftCount: giftItems.length
+  };
 };
 
 // Helper function to extract transaction information (ORDERID, Phone, Name) from QPay invoice
@@ -619,6 +800,25 @@ exports.checkPaymentStatus = async (req, res) => {
         }
       }
 
+      // Sync to Chuchu after payment success. If gift items exist, send split duplicated payloads.
+      if (orderWithItems) {
+        try {
+          const chuchuResult = await syncOrderToChuchuWithGiftSplit(orderWithItems, {
+            address: orderWithItems.shipping_address,
+            district: orderWithItems.district,
+            khoroo: orderWithItems.khoroo,
+            phone: orderWithItems.phone_number || '',
+            comment: ''
+          });
+          if (chuchuResult?.skipped) {
+            console.log(`Chuchu sync skipped for order ${order.id}: ${chuchuResult.reason}`);
+          }
+        } catch (chuchuError) {
+          // Don't fail payment flow on external delivery API failure.
+          console.warn(`Chuchu sync failed for order ${order.id}:`, chuchuError.response?.data || chuchuError.message);
+        }
+      }
+
       // Save address when QPay payment is successful (for authenticated users, non-pickup orders)
       if (orderWithItems) {
         saveAddressFromOrder(orderWithItems).then(result => {
@@ -718,6 +918,24 @@ exports.paymentWebhook = async (req, res) => {
           console.log(`Stock deducted successfully for order ${order.id} via QPay webhook`);
         } else {
           console.warn(`Stock deduction had errors for order ${order.id} via webhook:`, stockResult.errors);
+        }
+      }
+
+      // Sync to Chuchu after webhook payment success. If gift items exist, send split duplicated payloads.
+      if (orderWithItems) {
+        try {
+          const chuchuResult = await syncOrderToChuchuWithGiftSplit(orderWithItems, {
+            address: orderWithItems.shipping_address,
+            district: orderWithItems.district,
+            khoroo: orderWithItems.khoroo,
+            phone: orderWithItems.phone_number || '',
+            comment: ''
+          });
+          if (chuchuResult?.skipped) {
+            console.log(`Chuchu sync skipped for order ${order.id} via webhook: ${chuchuResult.reason}`);
+          }
+        } catch (chuchuError) {
+          console.warn(`Chuchu sync failed for order ${order.id} via webhook:`, chuchuError.response?.data || chuchuError.message);
         }
       }
 
