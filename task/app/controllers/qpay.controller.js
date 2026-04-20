@@ -267,7 +267,7 @@ const getInvoiceFields = (order) => {
   return { invoiceNumber, invoiceDate, customerRegister, customerEmail };
 };
 
-const buildChuchuPayload = (order, items, options = {}) => {
+const buildChuchuPayload = (order, items, options = {}, packQuantityMap = new Map()) => {
   const shippingAddress = options.address || order.shipping_address || '';
   const addressComponents = parseAddressComponents(shippingAddress);
   const district = options.district || order.district || addressComponents.district || '';
@@ -281,8 +281,13 @@ const buildChuchuPayload = (order, items, options = {}) => {
   if (detailedAddress) fullAddressParts.push(detailedAddress);
   const fullAddress = fullAddressParts.join(', ');
 
-  const parcelInfo = items.map((item) => `${item.name_mn || item.name} x${item.quantity}`).join(', ');
-  const totalItems = items.reduce((sum, item) => sum + (parseInt(item.quantity, 10) || 0), 0);
+  const effectiveQty = (item) => {
+    const orderQty = parseInt(item.quantity, 10) || 0;
+    const multiplier = packQuantityMap.get(String(item.product_id)) || 1;
+    return orderQty * multiplier;
+  };
+  const parcelInfo = items.map((item) => `${item.name_mn || item.name} x${effectiveQty(item)}`).join(', ');
+  const totalItems = items.reduce((sum, item) => sum + effectiveQty(item), 0);
   const { invoiceNumber, invoiceDate, customerRegister, customerEmail } = getInvoiceFields(order);
 
   return {
@@ -315,7 +320,7 @@ const postToChuchu = async (payload, tag) => {
 
 const splitItemsByGift = async (items) => {
   if (!Array.isArray(items) || items.length === 0) {
-    return { giftItems: [], nonGiftItems: [] };
+    return { giftItems: [], nonGiftItems: [], packQuantityMap: new Map() };
   }
 
   const productIds = [...new Set(
@@ -327,11 +332,17 @@ const splitItemsByGift = async (items) => {
   const products = productIds.length
     ? await Product.findAll({
       where: { id: productIds },
-      attributes: ['id', 'isGift']
+      attributes: ['id', 'isGift', 'packQuantity']
     })
     : [];
 
   const giftMap = new Map(products.map((p) => [String(p.id), Boolean(p.isGift)]));
+  const packQuantityMap = new Map(
+    products.map((p) => {
+      const n = Number(p.packQuantity);
+      return [String(p.id), Number.isFinite(n) && n > 0 ? Math.floor(n) : 1];
+    })
+  );
   const giftItems = [];
   const nonGiftItems = [];
 
@@ -343,7 +354,7 @@ const splitItemsByGift = async (items) => {
     }
   }
 
-  return { giftItems, nonGiftItems };
+  return { giftItems, nonGiftItems, packQuantityMap };
 };
 
 const syncOrderToChuchuWithGiftSplit = async (order, options = {}) => {
@@ -355,11 +366,11 @@ const syncOrderToChuchuWithGiftSplit = async (order, options = {}) => {
     return { skipped: true, reason: 'no_items' };
   }
 
-  const { giftItems, nonGiftItems } = await splitItemsByGift(order.items);
+  const { giftItems, nonGiftItems, packQuantityMap } = await splitItemsByGift(order.items);
 
   // No gift items => keep original single-order behavior.
   if (giftItems.length === 0) {
-    const payload = buildChuchuPayload(order, order.items, options);
+    const payload = buildChuchuPayload(order, order.items, options, packQuantityMap);
     await postToChuchu(payload, 'single');
     return { success: true, mode: 'single' };
   }
@@ -367,9 +378,9 @@ const syncOrderToChuchuWithGiftSplit = async (order, options = {}) => {
   // Gift items present => duplicate submission with same order metadata, separated items only.
   const submissions = [];
   if (nonGiftItems.length > 0) {
-    submissions.push(postToChuchu(buildChuchuPayload(order, nonGiftItems, options), 'non_gift'));
+    submissions.push(postToChuchu(buildChuchuPayload(order, nonGiftItems, options, packQuantityMap), 'non_gift'));
   }
-  submissions.push(postToChuchu(buildChuchuPayload(order, giftItems, options), 'gift'));
+  submissions.push(postToChuchu(buildChuchuPayload(order, giftItems, options, packQuantityMap), 'gift'));
   await Promise.all(submissions);
   return {
     success: true,

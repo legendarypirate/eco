@@ -193,6 +193,13 @@ module.exports = (sequelize, Sequelize) => {
             allowNull: true,
             defaultValue: null,
             field: 'delivery_free_min_quantity'
+        },
+        /** Units inside one sold package (e.g. 1, 50, 100) */
+        packQuantity: {
+            type: Sequelize.INTEGER,
+            allowNull: false,
+            defaultValue: 1,
+            field: 'pack_quantity'
         }
     }, {
         timestamps: false,

@@ -225,6 +225,8 @@ type Product = {
   bankAccountId?: number;
   /** Хүргэлтийн үнэгүй доод ширхэг (бараа бүрт); хоосон = тохиргоо байхгүй */
   deliveryFreeMinQuantity?: number | null;
+  /** Нэг багц доторх бодит ширхэг (жишээ: 1, 50, 100) */
+  packQuantity?: number;
   inStock: boolean;
   stockQuantity: number;
   brand?: string;
@@ -1090,6 +1092,33 @@ function ProductEditForm({ product, onCancel, onSave, isCreating = false, catego
             <p className="text-xs text-muted-foreground mt-1">
               N заасан бол тухайн барааны ширхэг N ба түүнээс их үед тэр мөр шалгуур хангагдана. Сагсанд дор хаяж{" "}
               <strong>нэг</strong> бараа ийм шалгуураа хангасан л бол захиалгын хүргэлт 8800₮ нэмэгдэхгүй.
+            </p>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium block mb-1">
+              Багц дахь ширхэг (Chuchu quantity үржүүлэгч)
+            </label>
+            <Input
+              type="number"
+              min={1}
+              placeholder="Жишээ: 100"
+              value={form.packQuantity != null ? String(form.packQuantity) : "1"}
+              onChange={(e) => {
+                const v = e.target.value.trim();
+                if (v === "") {
+                  updateField("packQuantity", 1);
+                  return;
+                }
+                const n = parseInt(v, 10);
+                if (!Number.isNaN(n) && n >= 1) {
+                  updateField("packQuantity", n);
+                }
+              }}
+              disabled={uploading}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Chuchu руу илгээхдээ мөрийн quantity = сагсны тоо × энэ утга.
             </p>
           </div>
 
@@ -2076,6 +2105,7 @@ export default function AdminProductList() {
       company: "terguun_gereg",
       bankAccountId: undefined,
       deliveryFreeMinQuantity: null,
+      packQuantity: 1,
       inStock: true,
       stockQuantity: 0,
       brand: "",

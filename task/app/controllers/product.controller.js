@@ -129,7 +129,11 @@ exports.create = async (req, res) => {
           ? req.body.deliveryFreeMinQuantity
           : (req.body.delivery_free_min_quantity !== undefined
               ? req.body.delivery_free_min_quantity
-              : null)
+              : null),
+      packQuantity:
+        req.body.packQuantity !== undefined
+          ? req.body.packQuantity
+          : (req.body.pack_quantity !== undefined ? req.body.pack_quantity : 1)
     };
 
     console.log('Creating product with:', {
@@ -983,7 +987,8 @@ exports.update = async (req, res) => {
                     'images',
                     'company',
                     'bankAccountId',
-                    'deliveryFreeMinQuantity']; // per-line free delivery threshold
+                    'deliveryFreeMinQuantity',
+                    'packQuantity']; // per-line free delivery threshold + package units
     
     fields.forEach(field => {
       if (req.body[field] !== undefined) {
@@ -997,6 +1002,9 @@ exports.update = async (req, res) => {
     }
     if (req.body.delivery_free_min_quantity !== undefined && updateData.deliveryFreeMinQuantity === undefined) {
       updateData.deliveryFreeMinQuantity = req.body.delivery_free_min_quantity;
+    }
+    if (req.body.pack_quantity !== undefined && updateData.packQuantity === undefined) {
+      updateData.packQuantity = req.body.pack_quantity;
     }
 
     // Handle gift_floor_limit mapping (API uses snake_case, model uses camelCase)
