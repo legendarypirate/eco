@@ -59,7 +59,7 @@ export default function Home() {
             />
             <div className="p-4 sm:p-5">
               <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
-                Бичгийн цаасны сурталчилгаа
+                Хамгийн сүүлийн үеийн чанартай бичгийн цаас
               </h2>
             </div>
           </div>
