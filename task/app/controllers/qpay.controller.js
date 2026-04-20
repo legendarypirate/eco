@@ -286,7 +286,7 @@ const buildChuchuPayload = (order, items, options = {}, packQuantityMap = new Ma
     const multiplier = packQuantityMap.get(String(item.product_id)) || 1;
     return orderQty * multiplier;
   };
-  const parcelInfo = items.map((item) => `${item.name_mn || item.name} x${effectiveQty(item)}`).join(', ');
+  const parcelInfo = items.map((item) => `${item.name_mn || item.name} x${parseInt(item.quantity, 10) || 0}`).join(', ');
   const totalItems = items.reduce((sum, item) => sum + effectiveQty(item), 0);
   const { invoiceNumber, invoiceDate, customerRegister, customerEmail } = getInvoiceFields(order);
 
