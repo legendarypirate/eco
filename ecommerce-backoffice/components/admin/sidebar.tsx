@@ -41,6 +41,7 @@ const mainLinks = [
   { href: "/admin/bank-accounts", label: "Банкны данс", icon: Wallet },
   { href: "/admin/coupons", label: "Урамшуулал", icon: Ticket },
   { href: "/admin/banners", label: "Баннер", icon: Image },
+  { href: "/admin/popup-banners", label: "Popup баннер", icon: Image },
   { href: "/admin/footer", label: "Footer", icon: FileText },
   { href: "/admin/complaints", label: "Гомдол", icon: MessageSquare },
   { href: "/admin/call-sales", label: "Утасны харилцаа", icon: Phone },
@@ -106,7 +107,7 @@ export function Sidebar() {
     core: mainLinks.filter((l) => ["/admin", "/admin/users", "/admin/order", "/admin/qpay"].includes(l.href)),
     catalog: mainLinks.filter((l) => ["/admin/product", "/admin/categories", "/admin/gift-settings", "/admin/partners"].includes(l.href)),
     finance: mainLinks.filter((l) => ["/admin/bank-accounts", "/admin/coupons"].includes(l.href)),
-    content: mainLinks.filter((l) => ["/admin/banners", "/admin/footer"].includes(l.href)),
+    content: mainLinks.filter((l) => ["/admin/banners", "/admin/popup-banners", "/admin/footer"].includes(l.href)),
     support: mainLinks.filter((l) => ["/admin/complaints", "/admin/call-sales"].includes(l.href)),
   };
 

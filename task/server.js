@@ -95,6 +95,7 @@ require('./app/routes/bank_account.routes')(app);
 require('./app/routes/footer.routes')(app);
 require('./app/routes/coupon.routes')(app);
 require('./app/routes/banner.routes')(app);
+require('./app/routes/popup_banner.routes')(app);
 require('./app/routes/complaint.routes')(app);
 require('./app/routes/call_sales_activity.routes')(app);
 require('./app/routes/gift_setting.routes')(app);

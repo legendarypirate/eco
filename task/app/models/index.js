@@ -42,6 +42,7 @@ db.footers = require("./footer.model.js")(sequelize, Sequelize);
 db.coupons = require("./coupon.model.js")(sequelize, Sequelize);
 db.coupon_usage = require("./coupon_usage.model.js")(sequelize, Sequelize);
 db.banners = require("./banner.model.js")(sequelize, Sequelize);
+db.popup_banners = require("./popup_banner.model.js")(sequelize, Sequelize);
 db.complaints = require("./complaint.model.js")(sequelize, Sequelize);
 db.call_sales_activities = require("./call_sales_activity.model.js")(sequelize, Sequelize);
 db.gift_settings = require("./gift_setting.model.js")(sequelize, Sequelize);

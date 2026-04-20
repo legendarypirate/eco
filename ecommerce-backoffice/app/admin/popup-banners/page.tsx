@@ -31,7 +31,7 @@ export default function BannersPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Banner>({ image: '' });
 
-  const API_URL = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/banner`;
+  const API_URL = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/popup-banner`;
 
   // Get auth token from localStorage
   const getAuthToken = () => {
@@ -148,7 +148,7 @@ export default function BannersPage() {
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
 
-      setSuccess('Баннер амжилттай нэмэгдлээ');
+      setSuccess('Popup баннер амжилттай нэмэгдлээ');
       setEditForm({ image: '' });
       await fetchBanners();
     } catch (err) {
@@ -186,7 +186,7 @@ export default function BannersPage() {
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
 
-      setSuccess('Баннер амжилттай шинэчлэгдлээ');
+      setSuccess('Popup баннер амжилттай шинэчлэгдлээ');
       setEditingId(null);
       setEditForm({ image: '' });
       await fetchBanners();
@@ -222,7 +222,7 @@ export default function BannersPage() {
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
 
-      setSuccess('Баннер амжилттай устгагдлаа');
+      setSuccess('Popup баннер амжилттай устгагдлаа');
       await fetchBanners();
     } catch (err) {
       console.error('Error deleting banner:', err);
@@ -299,7 +299,7 @@ export default function BannersPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Баннер удирдлага</h1>
+        <h1 className="text-3xl font-bold">Popup баннер удирдлага</h1>
       </div>
 
       {error && (
@@ -352,7 +352,7 @@ export default function BannersPage() {
               id="new-text"
               value={editForm.text || ''}
               onChange={(e) => setEditForm({ ...editForm, text: e.target.value })}
-              placeholder="Баннерын текст"
+              placeholder="Popup дээр харагдах текст"
             />
           </div>
 
@@ -401,7 +401,7 @@ export default function BannersPage() {
       {/* Existing Banners */}
       <Card>
         <CardHeader>
-          <CardTitle>Баннерууд ({banners.length})</CardTitle>
+          <CardTitle>Popup баннерууд ({banners.length})</CardTitle>
         </CardHeader>
         <CardContent>
           {banners.length === 0 ? (

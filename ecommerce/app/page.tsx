@@ -36,7 +36,7 @@ export default function Home() {
       }
       try {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-        const res = await fetch(`${API_URL}/banner/published?placement=popup`);
+        const res = await fetch(`${API_URL}/popup-banner/published`);
         if (!res.ok) {
           setPopupBanner({
             id: 'default',
