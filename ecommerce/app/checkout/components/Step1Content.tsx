@@ -70,6 +70,8 @@ interface Step1ContentProps {
   isAuthenticated: boolean;
   subtotal: number;
   total: number;
+  /** Delivery fee if user chooses хүргэлтээр (0 = free per threshold, else 8800) */
+  previewDeliveryShipping: number;
   isCreatingInvoice: boolean;
   isProcessing: boolean;
   formatPrice: (price: number) => string;
@@ -92,6 +94,7 @@ const Step1Content = ({
   isAuthenticated,
   subtotal,
   total,
+  previewDeliveryShipping,
   isCreatingInvoice,
   isProcessing,
   formatPrice
@@ -599,7 +602,7 @@ const Step1Content = ({
                         <div className="flex-1">
                           <div className="font-medium">Хүргэлтээр</div>
                           <div className="text-sm text-gray-600 mt-1">
-                            {subtotal > 120000 ? 'Үнэгүй' : `${formatPrice(8800)}`} - 24 цагт
+                            {previewDeliveryShipping === 0 ? 'Үнэгүй' : `${formatPrice(previewDeliveryShipping)}`} - 24 цагт
                           </div>
                           <div className="text-xs text-gray-500 mt-2">
                             Таны зааж өгсөн хаягт хүргэж өгнө

@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useRouter } from 'next/navigation';
+import { calculateDeliveryShippingMnt } from '../lib/shipping';
 
 const CartPage = () => {
   const router = useRouter();
@@ -123,7 +124,10 @@ useEffect(() => {
       return sum + ((originalPrice - item.product.price) * item.quantity);
     }, 0);
 
-  const shipping = subtotal > 120000 ? 0 : 8800;
+  const shipping = calculateDeliveryShippingMnt({
+    deliveryMethod: 'delivery',
+    cartItems,
+  });
   const promoDiscount = appliedPromo?.discount || 0;
   const total = subtotal + shipping - promoDiscount;
 
@@ -737,7 +741,9 @@ useEffect(() => {
               <div className="space-y-3 border-t border-gray-200 pt-6">
                 <div className="flex items-center gap-3 text-sm text-gray-600">
                   <Truck className="w-4 h-4 text-green-600" />
-                  <span>120,000₮-с дээш үнэгүй хүргэлт</span>
+                  <span>
+                    Хүргэлт 8,800₮ — дор хаяж нэг бараанд тохируулсан доод ширхэг хангасан бол үнэгүй
+                  </span>
                 </div>
                 <div className="flex items-center gap-3 text-sm text-gray-600">
                   <CreditCard className="w-4 h-4 text-blue-600" />

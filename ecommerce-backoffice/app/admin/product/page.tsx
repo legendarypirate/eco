@@ -223,6 +223,8 @@ type Product = {
   // Owning company (affects which bank accounts show on checkout)
   company?: string;
   bankAccountId?: number;
+  /** Хүргэлтийн үнэгүй доод ширхэг (бараа бүрт); хоосон = тохиргоо байхгүй */
+  deliveryFreeMinQuantity?: number | null;
   inStock: boolean;
   stockQuantity: number;
   brand?: string;
@@ -1057,6 +1059,38 @@ function ProductEditForm({ product, onCancel, onSave, isCreating = false, catego
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium block mb-1">
+              Хүргэлт үнэгүй (доод ширхэг, зөвхөн энэ бараанд)
+            </label>
+            <Input
+              type="number"
+              min={1}
+              placeholder="Жишээ: 4 — хоосон бол энэ бараанд тусгай нөхцөлгүй"
+              value={
+                form.deliveryFreeMinQuantity != null && form.deliveryFreeMinQuantity !== undefined
+                  ? String(form.deliveryFreeMinQuantity)
+                  : ""
+              }
+              onChange={(e) => {
+                const v = e.target.value.trim();
+                if (v === "") {
+                  updateField("deliveryFreeMinQuantity", null);
+                  return;
+                }
+                const n = parseInt(v, 10);
+                if (!Number.isNaN(n) && n >= 1) {
+                  updateField("deliveryFreeMinQuantity", n);
+                }
+              }}
+              disabled={uploading}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              N заасан бол тухайн барааны ширхэг N ба түүнээс их үед тэр мөр шалгуур хангагдана. Сагсанд дор хаяж{" "}
+              <strong>нэг</strong> бараа ийм шалгуураа хангасан л бол захиалгын хүргэлт 8800₮ нэмэгдэхгүй.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -2041,6 +2075,7 @@ export default function AdminProductList() {
       subcategory: "",
       company: "terguun_gereg",
       bankAccountId: undefined,
+      deliveryFreeMinQuantity: null,
       inStock: true,
       stockQuantity: 0,
       brand: "",

@@ -18,7 +18,8 @@ interface Product {
   // Optional: affects which bank accounts should show on checkout
   company?: string;
   bankAccountId?: number;
-  // Add other product fields as needed
+  /** Per-product min quantity for free delivery (хүргэлт); omitted in old carts = no rule */
+  deliveryFreeMinQuantity?: number | null;
 }
 
 interface CartItem {

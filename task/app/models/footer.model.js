@@ -68,6 +68,12 @@ module.exports = (sequelize, Sequelize) => {
             allowNull: true,
             defaultValue: [],
             field: 'footer_links'
+        },
+        // Min total item quantity (non-gift) for free delivery when subtotal is below threshold; null = only use amount rule
+        deliveryFreeMinQuantity: {
+            type: Sequelize.INTEGER,
+            allowNull: true,
+            field: 'delivery_free_min_quantity'
         }
     }, {
         timestamps: true,

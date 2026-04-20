@@ -7,7 +7,9 @@ export interface Product {
   // Affects which bank accounts are shown on checkout
   company?: string;
   bankAccountId?: number;
-  
+  /** Per-product min quantity for free delivery line rule; null/omit = no rule */
+  deliveryFreeMinQuantity?: number | null;
+
   // Images - support multiple images
   images: string[];
   thumbnail: string;

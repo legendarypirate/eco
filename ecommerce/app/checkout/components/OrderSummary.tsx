@@ -2,7 +2,6 @@
 
 import { useMemo, memo, useCallback } from 'react';
 import { Package, Shield, Truck, Clock } from 'lucide-react';
-
 interface OrderSummaryProps {
   cartItems: any[];
   formData: any;
@@ -127,9 +126,9 @@ const OrderSummary = ({
               <span>-{formatPrice(couponDiscount)}</span>
             </div>
           )}
-          {formData.deliveryMethod === 'delivery' && shipping === 0 && displaySubtotal > 120000 && (
+          {formData.deliveryMethod === 'delivery' && shipping === 0 && (
             <div className="text-xs text-green-600 text-right">
-              * 120,000₮-с дээш хүргэлтийн нэмэлт төлбөр хөнгөлөгдсөн
+              * Дор хаяж нэг бараанд тохируулсан доод ширхэг хангагдсан — хүргэлтийн нэмэлт төлбөр хөнгөлөгдсөн
             </div>
           )}
           <div className="flex justify-between font-bold text-lg border-t border-gray-200 pt-3">

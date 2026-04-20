@@ -71,6 +71,9 @@ exports.createOrUpdate = async (req, res) => {
       copyrightText: req.body.copyrightText,
       footerLinks: req.body.footerLinks || []
     };
+    if (req.body.deliveryFreeMinQuantity !== undefined) {
+      footerData.deliveryFreeMinQuantity = req.body.deliveryFreeMinQuantity;
+    }
 
     if (footer) {
       // Update existing footer
@@ -122,6 +125,9 @@ exports.update = async (req, res) => {
     if (req.body.address !== undefined) updates.address = req.body.address;
     if (req.body.copyrightText !== undefined) updates.copyrightText = req.body.copyrightText;
     if (req.body.footerLinks !== undefined) updates.footerLinks = req.body.footerLinks;
+    if (req.body.deliveryFreeMinQuantity !== undefined) {
+      updates.deliveryFreeMinQuantity = req.body.deliveryFreeMinQuantity;
+    }
 
     const [updated] = await Footer.update(updates, {
       where: { id: id },

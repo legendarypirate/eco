@@ -33,6 +33,7 @@ interface Product {
   // Optional: affects checkout bank accounts
   company?: string;
   bankAccountId?: number;
+  deliveryFreeMinQuantity?: number | null;
   variations?: ProductVariation[];
   colorOptions?: ColorOption[];
   categories?: Category[];
@@ -554,6 +555,7 @@ const ProductListPageContent = () => {
           inStock: currentInStock,
           company: product.company,
           bankAccountId: product.bankAccountId,
+          deliveryFreeMinQuantity: product.deliveryFreeMinQuantity ?? null,
         },
         quantity: 1,
         selectedSize: selectedVariation?.attributes?.size || undefined,

@@ -123,7 +123,13 @@ exports.create = async (req, res) => {
       bankAccountId:
         req.body.bankAccountId !== undefined
           ? req.body.bankAccountId
-          : (req.body.bank_account_id !== undefined ? req.body.bank_account_id : null)
+          : (req.body.bank_account_id !== undefined ? req.body.bank_account_id : null),
+      deliveryFreeMinQuantity:
+        req.body.deliveryFreeMinQuantity !== undefined
+          ? req.body.deliveryFreeMinQuantity
+          : (req.body.delivery_free_min_quantity !== undefined
+              ? req.body.delivery_free_min_quantity
+              : null)
     };
 
     console.log('Creating product with:', {
@@ -976,7 +982,8 @@ exports.update = async (req, res) => {
                     'metaDescription', 'tags', 'weight', 'dimensions', 'publishedAt',
                     'images',
                     'company',
-                    'bankAccountId']; // Added checkout fields
+                    'bankAccountId',
+                    'deliveryFreeMinQuantity']; // per-line free delivery threshold
     
     fields.forEach(field => {
       if (req.body[field] !== undefined) {
@@ -987,6 +994,9 @@ exports.update = async (req, res) => {
     // Backward compatibility: allow snake_case bank_account_id
     if (req.body.bank_account_id !== undefined && updateData.bankAccountId === undefined) {
       updateData.bankAccountId = req.body.bank_account_id;
+    }
+    if (req.body.delivery_free_min_quantity !== undefined && updateData.deliveryFreeMinQuantity === undefined) {
+      updateData.deliveryFreeMinQuantity = req.body.delivery_free_min_quantity;
     }
 
     // Handle gift_floor_limit mapping (API uses snake_case, model uses camelCase)

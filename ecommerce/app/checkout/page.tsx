@@ -15,6 +15,7 @@ import OrderSummary from './components/OrderSummary';
 import InvoiceModal from './components/InvoiceModal';
 import { generateInvoicePDF, type InvoiceData } from './utils/invoicePDF';
 import { apiService } from '../services/api';
+import { calculateDeliveryShippingMnt } from '../lib/shipping';
 
 const CheckoutPageContent = () => {
   const router = useRouter();
@@ -273,20 +274,25 @@ const CheckoutPageContent = () => {
         return sum + (price * quantity);
       }, 0);
     
-    let shipping = 0;
-    if (formData.deliveryMethod === 'pickup' || formData.deliveryMethod === 'invoice') {
-      // Ирж авах: 0
-      shipping = 0;
-    } else {
-      // Хүргэлтээр: 5000 (or 0 if subtotal > 120000)
-      shipping = subtotal > 120000 ? 0 : 8800;
-    }
+    const shipping = calculateDeliveryShippingMnt({
+      deliveryMethod: formData.deliveryMethod,
+      cartItems,
+    });
     
     const couponDiscount = appliedCoupon?.discount || 0;
     const total = subtotal + shipping - couponDiscount;
     
     return { subtotal, shipping, couponDiscount, total };
   }, [cartItems, formData.deliveryMethod, appliedCoupon]);
+
+  const previewDeliveryShipping = useMemo(
+    () =>
+      calculateDeliveryShippingMnt({
+        deliveryMethod: 'delivery',
+        cartItems,
+      }),
+    [cartItems]
+  );
 
   const formatPrice = useCallback((price: number) => {
     return price.toLocaleString() + '₮';
@@ -555,9 +561,7 @@ const CheckoutPageContent = () => {
         return;
       }
 
-      // Calculate QPay invoice amount based on delivery method
-      // Pickup (ирж авах): amount = subtotal (product price only, shipping = 0)
-      // Delivery (хүргэлтээр): amount = subtotal + 5000 (or subtotal if subtotal > 120000)
+      // QPay invoice amount matches checkout total (includes delivery fee per threshold rules)
       const qpayAmount = total;
 
       // Prepare invoice data for QPay if invoice type is selected
@@ -906,8 +910,10 @@ const CheckoutPageContent = () => {
           throw new Error('Хүргэлтийн хаяг бүрэн оруулна уу');
         }
         
-        // Calculate shipping: 8800 if subtotal <= 120000, otherwise 0
-        calculatedShipping = subtotal > 120000 ? 0 : 8800;
+        calculatedShipping = calculateDeliveryShippingMnt({
+          deliveryMethod: 'delivery',
+          cartItems,
+        });
       } else {
         // Ирж авах or invoice method
         fullShippingAddress = 'Ирж авах';
@@ -1252,6 +1258,7 @@ const CheckoutPageContent = () => {
               isAuthenticated={isAuthenticated}
               subtotal={subtotal}
               total={total}
+              previewDeliveryShipping={previewDeliveryShipping}
               isCreatingInvoice={isCreatingInvoice}
               isProcessing={isProcessing}
               formatPrice={formatPrice}

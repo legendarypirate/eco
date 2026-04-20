@@ -285,6 +285,7 @@ const handleAddToCart = async () => {
         inStock: currentInStock,
         company: product.company,
         bankAccountId: product.bankAccountId,
+        deliveryFreeMinQuantity: product.deliveryFreeMinQuantity ?? null,
       },
       quantity: quantity,
       selectedSize: selectedSize || 'M',

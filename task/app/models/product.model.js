@@ -186,6 +186,13 @@ module.exports = (sequelize, Sequelize) => {
             type: Sequelize.INTEGER,
             allowNull: true,
             field: 'bank_account_id'
+        },
+        /** Min quantity of this cart line for free delivery (хүргэлт); null = not used */
+        deliveryFreeMinQuantity: {
+            type: Sequelize.INTEGER,
+            allowNull: true,
+            defaultValue: null,
+            field: 'delivery_free_min_quantity'
         }
     }, {
         timestamps: false,
