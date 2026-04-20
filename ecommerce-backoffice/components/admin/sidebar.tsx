@@ -26,6 +26,8 @@ import {
   Mail,
   Receipt,
   Package,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -64,6 +66,13 @@ export function Sidebar() {
   const [isMounted, setIsMounted] = useState(false);
   const isCrmRoute = pathname?.startsWith("/admin/crm");
   const [isCrmOpen, setIsCrmOpen] = useState<boolean>(!!isCrmRoute);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    core: true,
+    catalog: true,
+    finance: true,
+    content: true,
+    support: true,
+  });
 
   // This ensures we only render after component is mounted on client
   useEffect(() => {
@@ -93,33 +102,84 @@ export function Sidebar() {
     );
   }
 
+  const groupedLinks = {
+    core: mainLinks.filter((l) => ["/admin", "/admin/users", "/admin/order", "/admin/qpay"].includes(l.href)),
+    catalog: mainLinks.filter((l) => ["/admin/product", "/admin/categories", "/admin/gift-settings", "/admin/partners"].includes(l.href)),
+    finance: mainLinks.filter((l) => ["/admin/bank-accounts", "/admin/coupons"].includes(l.href)),
+    content: mainLinks.filter((l) => ["/admin/banners", "/admin/footer"].includes(l.href)),
+    support: mainLinks.filter((l) => ["/admin/complaints", "/admin/call-sales"].includes(l.href)),
+  };
+
+  const sectionTitles: Record<string, string> = {
+    core: "Ерөнхий",
+    catalog: "Бүтээгдэхүүн",
+    finance: "Санхүү",
+    content: "Контент",
+    support: "Хэрэглэгчийн үйлчилгээ",
+  };
+
+  const toggleGroup = (key: string) => {
+    setOpenGroups((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const renderSection = (key: keyof typeof groupedLinks) => {
+    const links = groupedLinks[key];
+    if (!links.length) return null;
+    const isOpen = openGroups[key];
+
+    return (
+      <div key={key} className="mb-2">
+        <button
+          type="button"
+          onClick={() => toggleGroup(key)}
+          className="w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-muted/60"
+        >
+          <span>{sectionTitles[key]}</span>
+          {isOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+        </button>
+        {isOpen && (
+          <div className="mt-1 flex flex-col gap-1">
+            {links.map(({ href, label, icon: Icon }) => (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all hover:bg-muted",
+                  pathname === href || (href !== "/admin" && pathname?.startsWith(href))
+                    ? "bg-primary/10 text-primary border border-primary/20"
+                    : "text-muted-foreground"
+                )}
+              >
+                <Icon className="w-4 h-4" />
+                {label}
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <aside className="w-64 bg-background border-r p-4 flex flex-col">
-      <h1 className="text-lg font-bold mb-6">Admin Panel</h1>
-      <nav className="flex flex-col gap-2">
-        {mainLinks.map(({ href, label, icon: Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            className={cn(
-              "flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium hover:bg-muted transition",
-              pathname === href || (href !== "/admin" && pathname?.startsWith(href))
-                ? "bg-muted text-primary"
-                : "text-muted-foreground"
-            )}
-          >
-            <Icon className="w-4 h-4" />
-            {label}
-          </Link>
-        ))}
+    <aside className="w-72 bg-background border-r p-4 flex flex-col">
+      <div className="mb-5">
+        <h1 className="text-lg font-bold">Admin Panel</h1>
+        <p className="text-xs text-muted-foreground mt-1">Удирдлагын цэс</p>
+      </div>
+      <nav className="flex-1 overflow-y-auto pr-1">
+        {renderSection("core")}
+        {renderSection("catalog")}
+        {renderSection("finance")}
+        {renderSection("content")}
+        {renderSection("support")}
 
         {/* CRM grouped submenu */}
-        <div className="mt-2">
+        <div className="mt-3 pt-3 border-t">
           <button
             type="button"
             onClick={() => setIsCrmOpen((open) => !open)}
             className={cn(
-              "w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium hover:bg-muted transition",
+              "w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-semibold hover:bg-muted transition",
               isCrmRoute ? "bg-muted text-primary" : "text-muted-foreground"
             )}
           >
@@ -127,7 +187,7 @@ export function Sidebar() {
               <Briefcase className="w-4 h-4" />
               <span>CRM</span>
             </span>
-            <span className="text-xs">{isCrmOpen ? "−" : "+"}</span>
+            {isCrmOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
           </button>
           {isCrmOpen && (
             <div className="mt-1 ml-4 flex flex-col gap-1">
@@ -138,7 +198,7 @@ export function Sidebar() {
                   className={cn(
                     "flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium hover:bg-muted transition",
                     pathname === href
-                      ? "bg-muted text-primary"
+                      ? "bg-primary/10 text-primary border border-primary/20"
                       : "text-muted-foreground"
                   )}
                 >

@@ -11,20 +11,65 @@ import Partners from './components/Partners';
 import { X } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
 
+interface PopupBanner {
+  id: string | number;
+  image: string;
+  text?: string;
+  link?: string;
+}
+
 export default function Home() {
   const { isAuthenticated, isLoading } = useAuth();
   const [showPromoModal, setShowPromoModal] = useState(false);
+  const [popupBanner, setPopupBanner] = useState<PopupBanner | null>(null);
 
   useEffect(() => {
     document.title = 'Нүүр хуудас | TSAAS';
   }, []);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      setShowPromoModal(true);
-    } else {
-      setShowPromoModal(false);
-    }
+    const loadPopupBanner = async () => {
+      if (isLoading || isAuthenticated) {
+        setShowPromoModal(false);
+        setPopupBanner(null);
+        return;
+      }
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+        const res = await fetch(`${API_URL}/banner/published?placement=popup`);
+        if (!res.ok) {
+          setPopupBanner({
+            id: 'default',
+            image: '/bichgiin.png',
+            text: 'Хамгийн сүүлийн үеийн чанартай бичгийн цаас',
+          });
+          setShowPromoModal(true);
+          return;
+        }
+        const data = await res.json();
+        const first = Array.isArray(data) && data.length > 0 ? data[0] : null;
+        if (first) {
+          setPopupBanner(first);
+          setShowPromoModal(true);
+        } else {
+          setPopupBanner({
+            id: 'default',
+            image: '/bichgiin.png',
+            text: 'Хамгийн сүүлийн үеийн чанартай бичгийн цаас',
+          });
+          setShowPromoModal(true);
+        }
+      } catch {
+        setPopupBanner({
+          id: 'default',
+          image: '/bichgiin.png',
+          text: 'Хамгийн сүүлийн үеийн чанартай бичгийн цаас',
+        });
+        setShowPromoModal(true);
+      }
+    };
+
+    loadPopupBanner();
   }, [isAuthenticated, isLoading]);
 
   return (
@@ -52,14 +97,24 @@ export default function Home() {
               <X className="w-5 h-5" />
             </button>
 
-            <img
-              src="/bichgiin.png"
-              alt="Бичгийн цаасны сурталчилгаа"
-              className="w-full h-auto object-cover"
-            />
+            {popupBanner?.link ? (
+              <a href={popupBanner.link} target="_blank" rel="noopener noreferrer">
+                <img
+                  src={popupBanner.image}
+                  alt={popupBanner.text || 'Бичгийн цаасны сурталчилгаа'}
+                  className="w-full h-auto object-cover"
+                />
+              </a>
+            ) : (
+              <img
+                src={popupBanner?.image || '/bichgiin.png'}
+                alt={popupBanner?.text || 'Бичгийн цаасны сурталчилгаа'}
+                className="w-full h-auto object-cover"
+              />
+            )}
             <div className="p-4 sm:p-5">
               <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
-                Хамгийн сүүлийн үеийн чанартай бичгийн цаас
+                {popupBanner?.text || 'Хамгийн сүүлийн үеийн чанартай бичгийн цаас'}
               </h2>
             </div>
           </div>

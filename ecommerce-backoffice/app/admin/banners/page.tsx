@@ -19,6 +19,7 @@ interface Banner {
   image: string;
   order?: number;
   isActive?: boolean;
+  placement?: 'hero' | 'popup';
 }
 
 export default function BannersPage() {
@@ -29,7 +30,7 @@ export default function BannersPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [uploading, setUploading] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<Banner>({ image: '' });
+  const [editForm, setEditForm] = useState<Banner>({ image: '', placement: 'hero' });
 
   const API_URL = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/banner`;
 
@@ -140,6 +141,7 @@ export default function BannersPage() {
           link: editForm.link || '',
           image: editForm.image,
           isActive: editForm.isActive !== undefined ? editForm.isActive : true,
+          placement: editForm.placement || 'hero',
         }),
       });
 
@@ -149,7 +151,7 @@ export default function BannersPage() {
       }
 
       setSuccess('Баннер амжилттай нэмэгдлээ');
-      setEditForm({ image: '' });
+      setEditForm({ image: '', placement: 'hero' });
       await fetchBanners();
     } catch (err) {
       console.error('Error creating banner:', err);
@@ -188,7 +190,7 @@ export default function BannersPage() {
 
       setSuccess('Баннер амжилттай шинэчлэгдлээ');
       setEditingId(null);
-      setEditForm({ image: '' });
+      setEditForm({ image: '', placement: 'hero' });
       await fetchBanners();
     } catch (err) {
       console.error('Error updating banner:', err);
@@ -241,7 +243,7 @@ export default function BannersPage() {
   // Cancel editing
   const cancelEdit = () => {
     setEditingId(null);
-    setEditForm({ image: '' });
+    setEditForm({ image: '', placement: 'hero' });
   };
 
   // Move banner order
@@ -366,6 +368,19 @@ export default function BannersPage() {
             />
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="new-placement">Байршил</Label>
+            <select
+              id="new-placement"
+              className="w-full border rounded-md px-3 py-2 text-sm"
+              value={editForm.placement || 'hero'}
+              onChange={(e) => setEditForm({ ...editForm, placement: e.target.value as 'hero' | 'popup' })}
+            >
+              <option value="hero">Hero slider</option>
+              <option value="popup">Home popup (non-auth)</option>
+            </select>
+          </div>
+
           <div className="flex items-center space-x-2">
             <Checkbox
               id="new-active"
@@ -457,6 +472,18 @@ export default function BannersPage() {
                         />
                       </div>
 
+                      <div className="space-y-2">
+                        <Label>Байршил</Label>
+                        <select
+                          className="w-full border rounded-md px-3 py-2 text-sm"
+                          value={editForm.placement || 'hero'}
+                          onChange={(e) => setEditForm({ ...editForm, placement: e.target.value as 'hero' | 'popup' })}
+                        >
+                          <option value="hero">Hero slider</option>
+                          <option value="popup">Home popup (non-auth)</option>
+                        </select>
+                      </div>
+
                       <div className="flex items-center space-x-2">
                         <Checkbox
                           checked={editForm.isActive !== false}
@@ -512,6 +539,9 @@ export default function BannersPage() {
                           <div className="flex items-center gap-2 mt-2">
                             <span className={`text-xs px-2 py-1 rounded ${banner.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                               {banner.isActive ? 'Идэвхтэй' : 'Идэвхгүй'}
+                            </span>
+                            <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-800">
+                              {banner.placement === 'popup' ? 'Popup' : 'Hero'}
                             </span>
                             <span className="text-xs text-muted-foreground">
                               Дараалал: {banner.order !== undefined ? banner.order + 1 : 'N/A'}

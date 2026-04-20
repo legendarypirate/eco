@@ -21,6 +21,11 @@ module.exports = (sequelize, Sequelize) => {
         type: Sequelize.BOOLEAN,
         allowNull: false,
         defaultValue: true
+      },
+      placement: {
+        type: Sequelize.STRING,
+        allowNull: false,
+        defaultValue: 'hero'
       }
     });
   

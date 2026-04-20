@@ -2,6 +2,11 @@ const db = require("../models");
 const Banner = db.banners;
 const Op = db.Sequelize.Op;
 
+const normalizePlacement = (placement) => {
+  const p = String(placement || 'hero').toLowerCase();
+  return p === 'popup' ? 'popup' : 'hero';
+};
+
 // Create and Save a new Banner
 exports.create = async (req, res) => {
   try {
@@ -34,7 +39,8 @@ exports.create = async (req, res) => {
       link: req.body.link || "",
       image: req.body.image,
       order: order,
-      isActive: req.body.isActive !== undefined ? req.body.isActive : true
+      isActive: req.body.isActive !== undefined ? req.body.isActive : true,
+      placement: normalizePlacement(req.body.placement)
     };
 
     const data = await Banner.create(banner);
@@ -65,10 +71,14 @@ exports.findAll = async (req, res) => {
 // Retrieve all active Banners (for public API)
 exports.findAllPublished = async (req, res) => {
   try {
+    const placement = req.query.placement ? normalizePlacement(req.query.placement) : null;
+    const where = { isActive: true };
+    if (placement) where.placement = placement;
+
     const data = await Banner.findAll({
-      where: { isActive: true },
+      where,
       order: [['order', 'ASC']],
-      attributes: ['id', 'text', 'link', 'image', 'order']
+      attributes: ['id', 'text', 'link', 'image', 'order', 'placement']
     });
     res.send(data);
   } catch (error) {
@@ -112,7 +122,12 @@ exports.update = async (req, res) => {
       });
     }
 
-    const [updated] = await Banner.update(req.body, {
+    const updateData = { ...req.body };
+    if (updateData.placement !== undefined) {
+      updateData.placement = normalizePlacement(updateData.placement);
+    }
+
+    const [updated] = await Banner.update(updateData, {
       where: { id: id }
     });
 
