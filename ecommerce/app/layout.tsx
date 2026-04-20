@@ -5,6 +5,7 @@ import "./globals.css";
 import { CartProvider } from "./context/CartContext";
 import { AuthProvider } from './context/AuthContext';
 import ReOrderHandler from './components/ReOrderHandler';
+import CrowSetup from "./components/CrowSetup";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -34,6 +35,7 @@ export default function RootLayout({
         <AuthProvider>
           <CartProvider>
             <ReOrderHandler />
+            <CrowSetup />
             {children}
           </CartProvider>
         </AuthProvider>
