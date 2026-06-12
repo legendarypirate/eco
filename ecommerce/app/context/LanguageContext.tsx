@@ -22,7 +22,7 @@ import {
 interface LanguageContextType {
   locale: Locale;
   setLocale: (locale: Locale) => void;
-  t: (key: keyof TranslationKeys) => string;
+  t: (key: keyof TranslationKeys, params?: Record<string, string | number>) => string;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
@@ -55,7 +55,15 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const t = useCallback(
-    (key: keyof TranslationKeys) => translations[locale][key],
+    (key: keyof TranslationKeys, params?: Record<string, string | number>) => {
+      let text = translations[locale][key];
+      if (params) {
+        Object.entries(params).forEach(([paramKey, value]) => {
+          text = text.replace(`{${paramKey}}`, String(value));
+        });
+      }
+      return text;
+    },
     [locale]
   );
 

@@ -12,12 +12,14 @@ import Footer from '../components/Footer';
 import Link from 'next/link';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { calculateDeliveryShippingMnt } from '../lib/shipping';
 
 const CartPage = () => {
   const router = useRouter();
   const { user, isAuthenticated, isLoading: authLoading, login, loginWithGoogle } = useAuth();
+  const { t } = useLanguage();
   const { 
     cartItems, 
     removeFromCart, 
@@ -45,8 +47,8 @@ const CartPage = () => {
   const [isGoogleRedirecting, setIsGoogleRedirecting] = useState(false);
 
   useEffect(() => {
-    document.title = 'Сагс | TSAAS';
-  }, []);
+    document.title = `${t('cartTitle')} | TSAAS`;
+  }, [t]);
 
   useEffect(() => {
     // Simulate loading
@@ -323,7 +325,7 @@ useEffect(() => {
         <div className="container mx-auto px-4 py-12">
           <div className="text-center">
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
-            <p className="mt-4 text-gray-600">Сагсны мэдээлэл ачаалж байна...</p>
+            <p className="mt-4 text-gray-600">{t('cartLoading')}</p>
           </div>
         </div>
         <Footer />
@@ -340,17 +342,15 @@ useEffect(() => {
             <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
               <ShoppingBag className="w-12 h-12 text-gray-400" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-3">Сагс хоосон байна</h1>
-            <p className="text-gray-600 mb-8">
-              Та сагсанд бараа нэмээгүй байна. Дэлгүүрээс сонирхолтой бараагаа сонгоно уу.
-            </p>
+            <h1 className="text-2xl font-bold text-gray-900 mb-3">{t('emptyCart')}</h1>
+            <p className="text-gray-600 mb-8">{t('emptyCartDesc')}</p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Link
                 href="/product"
                 className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 font-medium"
               >
                 <ArrowLeft className="w-4 h-4" />
-                Дэлгүүр рүү буцах
+                {t('continueShopping')}
               </Link>
               {wishlistCount > 0 && (
                 <Link
@@ -358,7 +358,7 @@ useEffect(() => {
                   className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
                 >
                   <Heart className="w-4 h-4" />
-                  Хүслийн жагсаалт ({wishlistCount})
+                  {t('wishlistTitle')} ({wishlistCount})
                 </Link>
               )}
             </div>
@@ -375,9 +375,9 @@ useEffect(() => {
       <div className="container mx-auto px-4 py-8">
         {/* Page Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Таны сагс</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('yourCart')}</h1>
           <div className="flex items-center justify-between mt-2">
-            <p className="text-gray-600">{cartCount} бараа</p>
+            <p className="text-gray-600">{t('productsCount', { count: cartCount })}</p>
             {isAuthenticated && user && (
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 {user.avatar ? (
@@ -485,7 +485,7 @@ useEffect(() => {
                         <span className={`text-xs px-2 py-1 rounded whitespace-nowrap ${
                           item.product.inStock ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                         }`}>
-                          {item.product.inStock ? 'Бэлэн' : 'Дууссан'}
+                          {item.product.inStock ? t('inStock') : t('outOfStock')}
                         </span>
                       </div>
                       
@@ -523,14 +523,14 @@ useEffect(() => {
                                       ? 'text-red-500' 
                                       : 'text-gray-400 hover:text-red-500'
                                   }`}
-                                  title={isInWishlist(item.product.id) ? "Хүслийн жагсаалтаас хасах" : "Хүслийн жагсаалтад нэмэх"}
+                                  title={isInWishlist(item.product.id) ? t('removeFromWishlist') : t('addToWishlist')}
                                 >
                                   <Heart className="w-5 h-5 sm:w-4 sm:h-4" />
                                 </button>
                                 <button
                                   onClick={() => removeItem(item.id)}
                                   className="p-2 text-gray-400 hover:text-red-500 transition-colors touch-manipulation"
-                                  title="Устгах"
+                                  title={t('delete')}
                                 >
                                   <Trash2 className="w-5 h-5 sm:w-4 sm:h-4" />
                                 </button>
@@ -555,14 +555,14 @@ useEffect(() => {
                 className="inline-flex items-center gap-2 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" />
-                Дэлгүүр рүү буцах
+                {t('continueShopping')}
               </Link>
               
               <div className="flex items-center gap-4">
                 {isAuthenticated && (
                   <button
                     onClick={() => {
-                      alert('Сагс хадгалагдлаа.');
+                      alert(t('cartSaved'));
                     }}
                     className="text-sm text-gray-600 hover:text-gray-900 font-medium"
                   >
@@ -582,17 +582,17 @@ useEffect(() => {
           {/* Order Summary */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-lg border border-gray-200 p-6 sticky top-6">
-              <h2 className="text-lg font-bold text-gray-900 mb-6">Захиалгын дүн</h2>
+              <h2 className="text-lg font-bold text-gray-900 mb-6">{t('cartSummary')}</h2>
               
               <div className="space-y-4 mb-6">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Барааны үнэ</span>
+                  <span className="text-gray-600">{t('subtotal')}</span>
                   <span className="font-medium">{formatPrice(subtotal)}</span>
                 </div>
                 
                 {discount > 0 && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Хөнгөлөлт</span>
+                    <span className="text-gray-600">{t('discount')}</span>
                     <span className="text-green-600 font-medium">-{formatPrice(discount)}</span>
                   </div>
                 )}
@@ -613,15 +613,15 @@ useEffect(() => {
                 )}
                 
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Хүргэлт</span>
+                  <span className="text-gray-600">{t('shipping')}</span>
                   <span className="font-medium">
-                    {shipping === 0 ? 'ҮНЭГҮЙ' : formatPrice(shipping)}
+                    {shipping === 0 ? t('free') : formatPrice(shipping)}
                   </span>
                 </div>
                 
                 <div className="border-t border-gray-200 pt-4">
                   <div className="flex justify-between">
-                    <span className="font-bold text-gray-900">Төлөх дүн</span>
+                    <span className="font-bold text-gray-900">{t('total')}</span>
                     <span className="text-xl font-bold text-gray-900">{formatPrice(total)}</span>
                   </div>
                 </div>
@@ -632,7 +632,7 @@ useEffect(() => {
                 {!isAuthenticated && (
                   <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700 flex items-start gap-2">
                     <Lock className="h-3 w-3 mt-0.5 flex-shrink-0" />
-                    <span>Урамшууллын код хэрэглэхийн тулд нэвтрэх шаардлагатай</span>
+                    <span>{t('promoLoginHint')}</span>
                   </div>
                 )}
                 <div className="flex gap-2">
@@ -642,7 +642,7 @@ useEffect(() => {
                     </div>
                     <input
                       type="text"
-                      placeholder={isAuthenticated ? "Урамшууллын код" : "Нэвтрэх шаардлагатай"}
+                      placeholder={isAuthenticated ? t('promoPlaceholder') : t('promoLoginRequired')}
                       className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-900/20 focus:border-gray-300 disabled:opacity-50"
                       value={promoCode}
                       onChange={(e) => {
@@ -669,7 +669,7 @@ useEffect(() => {
                         Шалгаж байна...
                       </span>
                     ) : (
-                      'Хэрэглэх'
+                      t('apply')
                     )}
                   </button>
                 </div>
@@ -687,8 +687,8 @@ useEffect(() => {
                 )}
                 <p className="text-xs text-gray-500 mt-2">
                   {isAuthenticated 
-                    ? "Урамшууллын кодыг оруулаад хэрэглэнэ үү"
-                    : "Урамшууллын код хэрэглэхийн тулд эхлээд нэвтрэнэ үү"}
+                    ? t('promoApplyHint')
+                    : t('promoLoginHint')}
                 </p>
               </div>
               
@@ -704,7 +704,7 @@ useEffect(() => {
                     Google нэвтэрч байна...
                   </span>
                 ) : (
-                  `Төлбөр төлөх - ${formatPrice(total)}`
+                  t('payNow', { amount: formatPrice(total) })
                 )}
               </button>
               
@@ -921,7 +921,7 @@ useEffect(() => {
                         Нэвтэрч байна...
                       </span>
                     ) : (
-                      'Нэвтрэх ба төлбөр төлөх'
+                      t('loginAndPay')
                     )}
                   </button>
                 </form>

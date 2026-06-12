@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Product, ProductVariation } from '../lib/types';
 import { Star, ShoppingCart } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import { useLanguage } from '../context/LanguageContext';
 
 interface DemandedProductsProps {
   products?: Product[] | undefined;
@@ -13,6 +14,7 @@ const DemandedProducts: React.FC<DemandedProductsProps> = ({ products: propsProd
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { addToCart } = useCart();
+  const { t } = useLanguage();
   const [addingToCart, setAddingToCart] = useState<string | null>(null);
 
   // Fetch demanded products from API
@@ -146,7 +148,7 @@ const DemandedProducts: React.FC<DemandedProductsProps> = ({ products: propsProd
     e.stopPropagation();
     
     if (!variation.inStock) {
-      showToast('Энэ бүтээгдэхүүн дууссан байна', 'warning');
+      showToast(t('productOutOfStock'), 'warning');
       return;
     }
     
@@ -182,13 +184,13 @@ const DemandedProducts: React.FC<DemandedProductsProps> = ({ products: propsProd
       const result = addToCart(cartItem);
       
       if (result.alreadyExists) {
-        showToast('энэ бараа сагсанд байна', 'warning');
+        showToast(t('alreadyInCart'), 'warning');
       } else if (result.success) {
-        showToast('Сагсанд нэмэгдлээ', 'success');
+        showToast(t('addedToCart'), 'success');
       }
     } catch (error) {
       console.error('Error adding to cart:', error);
-      showToast('Алдаа гарлаа. Дахин оролдоно уу.', 'error');
+      showToast(t('tryAgainError'), 'error');
     } finally {
       setAddingToCart(null);
     }
@@ -201,10 +203,10 @@ const DemandedProducts: React.FC<DemandedProductsProps> = ({ products: propsProd
         <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-10">
             <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
-              <span className="text-gray-800">Их</span>{' '}
-              <span className="text-amber-700">зарагдсан</span>
+              <span className="text-gray-800">{t('bestsellerPrefix')}</span>{' '}
+              <span className="text-amber-700">{t('bestsellerSuffix')}</span>
             </h2>
-            <p className="text-gray-500 text-sm">Ачаалж байна...</p>
+            <p className="text-gray-500 text-sm">{t('loading')}</p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 max-w-[2000px] mx-auto">
             {[...Array(6)].map((_, i) => (
@@ -233,7 +235,7 @@ const DemandedProducts: React.FC<DemandedProductsProps> = ({ products: propsProd
             <div className="text-gray-400 mb-4">
               <ShoppingCart className="w-12 h-12 mx-auto" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Алдаа гарлаа</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">{t('errorOccurred')}</h3>
             <p className="text-gray-500">{error}</p>
           </div>
         </div>
@@ -250,8 +252,8 @@ const DemandedProducts: React.FC<DemandedProductsProps> = ({ products: propsProd
             <div className="text-gray-400 mb-4">
               <ShoppingCart className="w-12 h-12 mx-auto" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Их зарагдсан бүтээгдэхүүн байхгүй</h3>
-            <p className="text-gray-500">Их зарагдсан бүтээгдэхүүн одоогоор бэлэн болоогүй байна.</p>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">{t('noBestsellerProducts')}</h3>
+            <p className="text-gray-500">{t('bestsellerNotAvailable')}</p>
           </div>
         </div>
       </section>
@@ -270,7 +272,7 @@ const DemandedProducts: React.FC<DemandedProductsProps> = ({ products: propsProd
               <div className="relative px-4">
                 <span className="text-gray-800 font-medium text-sm tracking-wider bg-white/80 backdrop-blur-sm px-4 py-1.5 rounded-lg border border-gray-200/60 flex items-center space-x-2">
                   <div className="w-1.5 h-1.5 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full animate-pulse"></div>
-                  <span>Их зарагдсан бүтээгдэхүүн</span>
+                  <span>{t('bestsellerBadge')}</span>
                 </span>
               </div>
             </div>
@@ -335,7 +337,7 @@ const DemandedProducts: React.FC<DemandedProductsProps> = ({ products: propsProd
                     )}
                     {!variation.inStock && (
                       <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
-                        <span className="text-xs font-medium text-gray-700 bg-white px-2 py-1 rounded border">Дууссан</span>
+                        <span className="text-xs font-medium text-gray-700 bg-white px-2 py-1 rounded border">{t('outOfStock')}</span>
                       </div>
                     )}
                   </div>
@@ -410,12 +412,12 @@ const DemandedProducts: React.FC<DemandedProductsProps> = ({ products: propsProd
                       {addingToCart === String(variation.id) ? (
                         <>
                           <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                          <span>Нэмэж байна...</span>
+                          <span>{t('addingToCart')}</span>
                         </>
                       ) : (
                         <>
                           <ShoppingCart className="w-3.5 h-3.5" />
-                          {variation.inStock ? 'Сагслах' : 'Дууссан'}
+                          {variation.inStock ? t('addToCart') : t('outOfStock')}
                         </>
                       )}
                     </button>
@@ -434,7 +436,7 @@ const DemandedProducts: React.FC<DemandedProductsProps> = ({ products: propsProd
               <div className="h-px w-8 bg-gray-300"></div>
               <span className="flex items-center space-x-1">
                 <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                <span>Их зарагдсан</span>
+                <span>{t('bestsellerBadge')}</span>
               </span>
               <div className="h-px w-8 bg-gray-300"></div>
             </div>

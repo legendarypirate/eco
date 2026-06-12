@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, Globe } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
-import { LOCALE_CODES, LOCALE_LABELS, LOCALES, Locale } from '../i18n';
+import { LOCALE_CODES, LOCALE_FLAGS, LOCALE_LABELS, LOCALES, Locale } from '../i18n';
 
 export default function LanguageSwitcher() {
   const { locale, setLocale, t } = useLanguage();
@@ -35,14 +35,14 @@ export default function LanguageSwitcher() {
         aria-expanded={open}
         aria-haspopup="listbox"
       >
-        <Globe className="w-4 h-4" />
+        <span className="text-base leading-none" aria-hidden="true">{LOCALE_FLAGS[locale]}</span>
         <span className="text-xs font-semibold tracking-wide">{LOCALE_CODES[locale]}</span>
         <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
         <div
-          className="absolute top-full right-0 mt-2 w-44 bg-white border border-gray-200 shadow-lg rounded-lg z-50 py-1"
+          className="absolute top-full right-0 mt-2 w-48 bg-white border border-gray-200 shadow-lg rounded-lg z-50 py-1"
           role="listbox"
           aria-label={t('language')}
         >
@@ -53,13 +53,14 @@ export default function LanguageSwitcher() {
               role="option"
               aria-selected={locale === code}
               onClick={() => handleSelect(code)}
-              className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
+              className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
                 locale === code
                   ? 'bg-gray-100 text-gray-900 font-medium'
                   : 'text-gray-700 hover:bg-gray-50'
               }`}
             >
-              <span>{LOCALE_LABELS[code]}</span>
+              <span className="text-lg leading-none" aria-hidden="true">{LOCALE_FLAGS[code]}</span>
+              <span className="flex-1 text-left">{LOCALE_LABELS[code]}</span>
               <span className="text-xs text-gray-400 font-medium">{LOCALE_CODES[code]}</span>
             </button>
           ))}

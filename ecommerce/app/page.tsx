@@ -10,6 +10,7 @@ import DemandedProducts from './components/DemandedProducts';
 import Partners from './components/Partners';
 import { X } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
+import { useLanguage } from './context/LanguageContext';
 
 interface PopupBanner {
   id: string | number;
@@ -20,12 +21,13 @@ interface PopupBanner {
 
 export default function Home() {
   const { isAuthenticated, isLoading } = useAuth();
+  const { t } = useLanguage();
   const [showPromoModal, setShowPromoModal] = useState(false);
   const [popupBanner, setPopupBanner] = useState<PopupBanner | null>(null);
 
   useEffect(() => {
-    document.title = 'Нүүр хуудас | TSAAS';
-  }, []);
+    document.title = `${t('homePageTitle')} | TSAAS`;
+  }, [t]);
 
   useEffect(() => {
     const loadPopupBanner = async () => {
@@ -41,7 +43,7 @@ export default function Home() {
           setPopupBanner({
             id: 'default',
             image: '/bichgiin.png',
-            text: 'Хамгийн сүүлийн үеийн чанартай бичгийн цаас',
+            text: t('promoDefaultText'),
           });
           setShowPromoModal(true);
           return;
@@ -55,7 +57,7 @@ export default function Home() {
           setPopupBanner({
             id: 'default',
             image: '/bichgiin.png',
-            text: 'Хамгийн сүүлийн үеийн чанартай бичгийн цаас',
+            text: t('promoDefaultText'),
           });
           setShowPromoModal(true);
         }
@@ -63,14 +65,14 @@ export default function Home() {
         setPopupBanner({
           id: 'default',
           image: '/bichgiin.png',
-          text: 'Хамгийн сүүлийн үеийн чанартай бичгийн цаас',
+          text: t('promoDefaultText'),
         });
         setShowPromoModal(true);
       }
     };
 
     loadPopupBanner();
-  }, [isAuthenticated, isLoading]);
+  }, [isAuthenticated, isLoading, t]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
@@ -101,20 +103,20 @@ export default function Home() {
               <a href={popupBanner.link} target="_blank" rel="noopener noreferrer">
                 <img
                   src={popupBanner.image}
-                  alt={popupBanner.text || 'Бичгийн цаасны сурталчилгаа'}
+                  alt={popupBanner.text || t('promoAltText')}
                   className="w-full h-auto object-cover"
                 />
               </a>
             ) : (
               <img
                 src={popupBanner?.image || '/bichgiin.png'}
-                alt={popupBanner?.text || 'Бичгийн цаасны сурталчилгаа'}
+                alt={popupBanner?.text || t('promoAltText')}
                 className="w-full h-auto object-cover"
               />
             )}
             <div className="p-4 sm:p-5">
               <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
-                {popupBanner?.text || 'Хамгийн сүүлийн үеийн чанартай бичгийн цаас'}
+                {popupBanner?.text || t('promoDefaultText')}
               </h2>
             </div>
           </div>

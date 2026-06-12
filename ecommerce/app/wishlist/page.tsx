@@ -7,6 +7,7 @@ import Footer from '../components/Footer';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCart } from '../context/CartContext';
+import { useLanguage } from '../context/LanguageContext';
 
 const WishlistPage = () => {
   const [isClient, setIsClient] = useState(false);
@@ -18,11 +19,12 @@ const WishlistPage = () => {
     addToWishlist,
     isInWishlist 
   } = useCart();
+  const { t } = useLanguage();
 
   useEffect(() => {
     setIsClient(true);
-    document.title = 'Хүслийн жагсаалт | TSAAS';
-  }, []);
+    document.title = `${t('wishlistTitle')} | TSAAS`;
+  }, [t]);
 
   // Format price
   const formatPrice = (price: number | string | undefined): string => {
@@ -91,9 +93,9 @@ const WishlistPage = () => {
     
     const result = addToCart(cartItem);
     if (result.alreadyExists) {
-      showToast('энэ бараа сагсанд байна', 'warning');
+      showToast(t('alreadyInCart'), 'warning');
     } else if (result.success) {
-      showToast(`${item.product.nameMn} сагсанд нэмэгдлээ`, 'success');
+      showToast(t('addedToCart'), 'success');
     }
   };
 
@@ -149,16 +151,16 @@ const WishlistPage = () => {
     // Call context function
     if (typeof contextRemoveFromWishlist === 'function') {
       contextRemoveFromWishlist(id);
-      showToast('Бүтээгдэхүүн хүслийн жагсаалтаас хасагдлаа', 'success');
+      showToast(t('removedFromWishlist'), 'success');
     } else {
       console.error('contextRemoveFromWishlist is not a function');
-      showToast('Алдаа гарлаа. Дахин оролдоно уу.', 'error');
+      showToast(t('tryAgainError'), 'error');
     }
   };
 
   // Clear all wishlist
   const handleClearWishlist = () => {
-    if (confirm('Та хүслийн жагсаалтаа бүрэн цэвэрлэхдээ итгэлтэй байна уу?')) {
+    if (confirm(t('clearWishlistConfirm'))) {
       // Remove all items one by one
       wishlistItems.forEach(item => {
         if (typeof contextRemoveFromWishlist === 'function') {
@@ -166,7 +168,7 @@ const WishlistPage = () => {
         }
       });
       
-      showToast('Хүслийн жагсаалт цэвэрлэгдлээ', 'success');
+      showToast(t('wishlistCleared'), 'success');
     }
   };
 
@@ -174,7 +176,7 @@ const WishlistPage = () => {
   const handleToggleWishlist = (product: any) => {
     if (isInWishlist(product.id)) {
       contextRemoveFromWishlist(product.id);
-      showToast('Бүтээгдэхүүн хүслийн жагсаалтаас хасагдлаа', 'success');
+      showToast(t('removedFromWishlist'), 'success');
     } else {
       addToWishlist({
         id: product.id,
@@ -191,7 +193,7 @@ const WishlistPage = () => {
         },
         addedAt: new Date().toISOString()
       });
-      showToast('Бүтээгдэхүүн хүслийн жагсаалтанд нэмэгдлээ', 'success');
+      showToast(t('addedToWishlist'), 'success');
     }
   };
 
@@ -334,10 +336,8 @@ const WishlistPage = () => {
               <Heart className="w-12 h-12 text-gray-400" />
             </div>
             
-            <h1 className="text-2xl font-bold text-gray-900 mb-3">Хүслийн жагсаалт хоосон</h1>
-            <p className="text-gray-600 mb-8">
-              Та хүслийн жагсаалтад бараа нэмээгүй байна. Дуртай бараагаа хадгалахын тулд дуртай товчийг дарна уу.
-            </p>
+            <h1 className="text-2xl font-bold text-gray-900 mb-3">{t('emptyWishlist')}</h1>
+            <p className="text-gray-600 mb-8">{t('emptyWishlistDesc')}</p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
@@ -345,14 +345,14 @@ const WishlistPage = () => {
                 className="inline-flex items-center gap-2 px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 font-medium"
               >
                 <ArrowLeft className="w-4 h-4" />
-                Дэлгүүр рүү буцах
+                {t('continueShopping')}
               </Link>
               
               <Link
                 href="/product?category=featured"
                 className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
               >
-                Онцлох бараа үзэх
+                {t('featuredTitle')}
               </Link>
             </div>
           </div>
@@ -372,8 +372,8 @@ const WishlistPage = () => {
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Миний хүсэл</h1>
-              <p className="text-gray-600">{totalItems} бараа</p>
+              <h1 className="text-2xl font-bold text-gray-900">{t('wishlistTitle')}</h1>
+              <p className="text-gray-600">{t('productsCount', { count: totalItems })}</p>
             </div>
             
             <div className="flex items-center gap-4">
@@ -382,7 +382,7 @@ const WishlistPage = () => {
                 className="px-4 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 font-medium flex items-center gap-2"
               >
                 <ShoppingCart className="w-4 h-4" />
-                Бүгдийг сагслах
+                {t('addAllToCart')}
               </button>
               
               <button className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50">
@@ -481,7 +481,7 @@ const WishlistPage = () => {
                   {/* Stock Status */}
                   {!item.product.inStock && (
                     <div className="absolute top-3 right-3 bg-gray-800 text-white text-xs font-medium px-2 py-1 rounded">
-                      Дууссан
+                      {t('outOfStock')}
                     </div>
                   )}
                   
@@ -541,7 +541,7 @@ const WishlistPage = () => {
                         className="flex-1 py-2 border border-gray-300 text-gray-700 rounded text-sm font-medium hover:bg-gray-50 flex items-center justify-center gap-2"
                       >
                         <Eye className="w-3 h-3" />
-                        Дэлгэрэнгүй
+                        {t('learnMore')}
                       </Link>
                     ) : (
                       <button
@@ -553,7 +553,7 @@ const WishlistPage = () => {
                         disabled
                       >
                         <Eye className="w-3 h-3" />
-                        Дэлгэрэнгүй
+                        {t('learnMore')}
                       </button>
                     )}
                     
@@ -570,7 +570,7 @@ const WishlistPage = () => {
                       }`}
                     >
                       <ShoppingCart className="w-3 h-3" />
-                      Сагслах
+                      {t('addToCart')}
                     </button>
                   </div>
                 </div>
@@ -599,7 +599,7 @@ const WishlistPage = () => {
                 onClick={handleClearWishlist}
                 className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
               >
-                Бүгдийг цэвэрлэх
+                {t('clearWishlist')}
               </button>
             </div>
           </div>

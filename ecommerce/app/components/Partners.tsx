@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 interface Partner {
   id: string;
@@ -12,6 +13,7 @@ interface Partner {
 }
 
 const Partners = () => {
+  const { t } = useLanguage();
   const [partners, setPartners] = useState<Partner[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -45,7 +47,7 @@ const Partners = () => {
     return (
       <section className="w-full py-12 bg-white">
         <div className="container mx-auto px-4">
-          <h2 className="text-2xl font-bold text-center mb-8">Хамтран ажиллагсад</h2>
+          <h2 className="text-2xl font-bold text-center mb-8">{t('partnersTitle')}</h2>
           <div className="grid grid-cols-6 md:grid-cols-12 gap-4">
             {[...Array(12)].map((_, i) => (
               <div
@@ -67,7 +69,7 @@ const Partners = () => {
     <section className="w-full py-12 bg-white border-t border-gray-200">
       <div className="container mx-auto px-4">
         <h2 className="text-2xl md:text-3xl font-bold text-center mb-8 text-gray-900">
-          Хамтран ажиллагсад
+          {t('partnersTitle')}
         </h2>
         
         <div className="grid grid-cols-6 md:grid-cols-12 gap-4 md:gap-6">

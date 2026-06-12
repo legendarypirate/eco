@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Product, ProductVariation } from '../lib/types';
 import { Star, ShoppingCart } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import { useLanguage } from '../context/LanguageContext';
 
 interface FeaturedProductsProps {
   products?: Product[] | undefined;
@@ -20,6 +21,7 @@ const FeaturedProducts: React.FC<FeaturedProductsProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { addToCart } = useCart();
+  const { t } = useLanguage();
   const [addingToCart, setAddingToCart] = useState<string | null>(null);
   
   // Fetch featured products from API
@@ -157,7 +159,7 @@ const FeaturedProducts: React.FC<FeaturedProductsProps> = ({
     e.stopPropagation();
     
     if (!variation.inStock) {
-      showToast('Энэ бүтээгдэхүүн дууссан байна', 'warning');
+      showToast(t('productOutOfStock'), 'warning');
       return;
     }
     
@@ -193,13 +195,13 @@ const FeaturedProducts: React.FC<FeaturedProductsProps> = ({
       const result = addToCart(cartItem);
       
       if (result.alreadyExists) {
-        showToast('энэ бараа сагсанд байна', 'warning');
+        showToast(t('alreadyInCart'), 'warning');
       } else if (result.success) {
-        showToast('Сагсанд нэмэгдлээ', 'success');
+        showToast(t('addedToCart'), 'success');
       }
     } catch (error) {
       console.error('Error adding to cart:', error);
-      showToast('Алдаа гарлаа. Дахин оролдоно уу.', 'error');
+      showToast(t('tryAgainError'), 'error');
     } finally {
       setAddingToCart(null);
     }
@@ -211,8 +213,8 @@ const FeaturedProducts: React.FC<FeaturedProductsProps> = ({
       <section className="py-8">
         <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="mb-6 text-center">
-            <h2 className="text-xl font-semibold text-gray-900 mb-1">Онцлох Бүтээгдэхүүн</h2>
-            <p className="text-sm text-gray-500">Ачаалж байна...</p>
+            <h2 className="text-xl font-semibold text-gray-900 mb-1">{t('featuredTitle')}</h2>
+            <p className="text-sm text-gray-500">{t('loading')}</p>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
             {[...Array(6)].map((_, i) => (
@@ -238,13 +240,13 @@ const FeaturedProducts: React.FC<FeaturedProductsProps> = ({
       <section className="py-8">
         <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="mb-6 text-center">
-            <h2 className="text-xl font-semibold text-gray-900 mb-1">Онцлох Бүтээгдэхүүн</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-1">{t('featuredTitle')}</h2>
           </div>
           <div className="text-center py-12">
             <div className="text-gray-400 mb-4">
               <ShoppingCart className="w-12 h-12 mx-auto" />
             </div>
-            <p className="text-gray-500">Алдаа гарлаа: {error}</p>
+            <p className="text-gray-500">{t('errorOccurred')}: {error}</p>
           </div>
         </div>
       </section>
@@ -257,14 +259,14 @@ const FeaturedProducts: React.FC<FeaturedProductsProps> = ({
       <section className="py-8">
         <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="mb-6 text-center">
-            <h2 className="text-xl font-semibold text-gray-900 mb-1">Онцлох Бүтээгдэхүүн</h2>
-            <p className="text-sm text-gray-500">Онцлох бүтээгдэхүүн олдсонгүй</p>
+            <h2 className="text-xl font-semibold text-gray-900 mb-1">{t('featuredTitle')}</h2>
+            <p className="text-sm text-gray-500">{t('noFeaturedProducts')}</p>
           </div>
           <div className="text-center py-12">
             <div className="text-gray-400 mb-4">
               <ShoppingCart className="w-12 h-12 mx-auto" />
             </div>
-            <p className="text-gray-500">Онцлох бүтээгдэхүүн одоогоор бэлэн болоогүй байна.</p>
+            <p className="text-gray-500">{t('featuredNotAvailable')}</p>
           </div>
         </div>
       </section>
@@ -276,8 +278,8 @@ const FeaturedProducts: React.FC<FeaturedProductsProps> = ({
       <div className="w-full px-4 sm:px-6 lg:px-8">
         {/* Minimal Header */}
         <div className="mb-6 text-center">
-          <h2 className="text-xl font-semibold text-gray-900 mb-1">Онцлох Бүтээгдэхүүн</h2>
-          <p className="text-sm text-gray-500">{variations.length} бүтээгдэхүүн</p>
+          <h2 className="text-xl font-semibold text-gray-900 mb-1">{t('featuredTitle')}</h2>
+          <p className="text-sm text-gray-500">{t('productsCount', { count: variations.length })}</p>
         </div>
 
         {/* Optimized Grid for 16-inch MacBook - 6 columns */}
@@ -333,7 +335,7 @@ const FeaturedProducts: React.FC<FeaturedProductsProps> = ({
                     )}
                     {!variation.inStock && (
                       <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
-                        <span className="text-xs font-medium text-gray-700 bg-white px-2 py-1 rounded border">Дууссан</span>
+                        <span className="text-xs font-medium text-gray-700 bg-white px-2 py-1 rounded border">{t('outOfStock')}</span>
                       </div>
                     )}
                   </div>
@@ -409,12 +411,12 @@ const FeaturedProducts: React.FC<FeaturedProductsProps> = ({
                       {addingToCart === String(variation.id) ? (
                         <>
                           <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                          <span>Нэмэж байна...</span>
+                          <span>{t('addingToCart')}</span>
                         </>
                       ) : (
                         <>
                           <ShoppingCart className="w-3.5 h-3.5" />
-                          {variation.inStock ? 'Сагслах' : 'Дууссан'}
+                          {variation.inStock ? t('addToCart') : t('outOfStock')}
                         </>
                       )}
                     </button>

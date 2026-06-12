@@ -5,7 +5,15 @@ import kr from './locales/kr';
 import mn from './locales/mn';
 import { DEFAULT_LOCALE, LOCALES, Locale, Translations } from './types';
 
-export * from './types';
+export {
+  DEFAULT_LOCALE,
+  HTML_LANG,
+  LOCALE_CODES,
+  LOCALE_FLAGS,
+  LOCALE_LABELS,
+  LOCALES,
+} from './types';
+export type { Locale, TranslationKeys, Translations } from './types';
 
 export const translations: Translations = {
   en,

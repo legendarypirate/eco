@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Script from 'next/script';
+import { useLanguage } from '../context/LanguageContext';
+import { TranslationKeys } from '../i18n';
 
 interface SocialLink {
   name: string;
@@ -34,9 +36,42 @@ interface FooterData {
   footerLinks: FooterLink[];
 }
 
+function getDefaultFooterData(t: (key: keyof TranslationKeys) => string): FooterData {
+  return {
+    companyName: 'Tsaas.mn',
+    companySuffix: '.mn',
+    description: t('footerDefaultDescription'),
+    logoUrl: '/logotsas.png',
+    socialLinks: [
+      { name: 'Facebook', icon: 'f', url: '#' },
+      { name: 'Twitter', icon: 't', url: '#' },
+      { name: 'Instagram', icon: 'i', url: '#' },
+      { name: 'Pinterest', icon: 'p', url: '#' },
+    ],
+    quickLinks: [
+      { label: t('footerLinkHome'), url: '#' },
+      { label: t('footerLinkProducts'), url: '#' },
+      { label: t('footerLinkCategories'), url: '#' },
+      { label: t('footerLinkAbout'), url: '#' },
+      { label: t('footerLinkHelp'), url: '#' },
+    ],
+    phone: '+976 7000-5060',
+    email: 'info@tsaas.mn',
+    address: 'Улаанбаатар хот, Хан-Уул дүүрэг 2-р хороо 19 Үйлчилгээний төвөөс баруун тийш 15-р сургуулийн дэргэд',
+    copyrightText: '© 2025 Tsaas.mn',
+    footerLinks: [
+      { label: t('footerPrivacyPolicy'), url: '#' },
+      { label: t('footerTermsOfService'), url: '#' },
+      { label: t('footerPaymentTerms'), url: '#' },
+    ],
+  };
+}
+
 const Footer = () => {
+  const { t, locale } = useLanguage();
   const [footerData, setFooterData] = useState<FooterData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [useFallback, setUseFallback] = useState(false);
 
   useEffect(() => {
     const fetchFooter = async () => {
@@ -48,51 +83,21 @@ const Footer = () => {
             'Content-Type': 'application/json',
           },
         });
-        
+
         if (!response.ok) {
-          const errorText = await response.text().catch(() => 'Unknown error');
-          throw new Error(`Failed to fetch footer: ${response.status} ${response.statusText}. ${errorText}`);
+          throw new Error(`Failed to fetch footer: ${response.status}`);
         }
-        
+
         const data = await response.json();
         setFooterData(data);
+        setUseFallback(false);
       } catch (error) {
-        // Handle network errors and API errors
         if (error instanceof TypeError && error.message.includes('fetch')) {
           console.error('Network error fetching footer - API server may be down:', error);
         } else {
           console.error('Error fetching footer:', error);
         }
-        
-        // Set default data on error
-        setFooterData({
-          companyName: "Tsaas.mn",
-          companySuffix: ".mn",
-          description: "ПОСЫН ЦААС БӨӨНИЙ ХУДАЛДАА, КАССЫН ТОНОГ ТӨХӨӨРӨМЖИЙН ТӨВ",
-          logoUrl: "/logotsas.png",
-          socialLinks: [
-            { name: "Facebook", icon: "f", url: "#" },
-            { name: "Twitter", icon: "t", url: "#" },
-            { name: "Instagram", icon: "i", url: "#" },
-            { name: "Pinterest", icon: "p", url: "#" }
-          ],
-          quickLinks: [
-            { label: "Нүүр", url: "#" },
-            { label: "Бүтээгдэхүүн", url: "#" },
-            { label: "Ангилал", url: "#" },
-            { label: "Бидний тухай", url: "#" },
-            { label: "Тусламж", url: "#" }
-          ],
-          phone: "+976 7000-5060",
-          email: "info@tsaas.mn",
-          address: "Улаанбаатар хот, Хан-Уул дүүрэг 2-р хороо 19 Үйлчилгээний төвөөс баруун тийш 15-р сургуулийн дэргэд",
-          copyrightText: "© 2025 Tsaas.mn",
-          footerLinks: [
-            { label: "Нууцлалын бодлого", url: "#" },
-            { label: "Үйлчилгээний нөхцөл", url: "#" },
-            { label: "Төлбөрийн нөхцөл", url: "#" }
-          ]
-        });
+        setUseFallback(true);
       } finally {
         setLoading(false);
       }
@@ -101,22 +106,25 @@ const Footer = () => {
     fetchFooter();
   }, []);
 
-  // Initialize chatbot when script loads
+  useEffect(() => {
+    if (useFallback) {
+      setFooterData(getDefaultFooterData(t));
+    }
+  }, [locale, t, useFallback]);
+
   useEffect(() => {
     const initChatbot = () => {
       if (typeof window !== 'undefined' && (window as any).ktt10) {
         (window as any).ktt10.setup({
-          id: "KT6JpkeiKo4dJU",
-          accountId: "1800667",
-          color: "#006dff"
+          id: 'KT6JpkeiKo4dJU',
+          accountId: '1800667',
+          color: '#006dff',
         });
       }
     };
 
-    // Try to initialize immediately if script is already loaded
     initChatbot();
 
-    // Also listen for script load event
     const checkInterval = setInterval(() => {
       if (typeof window !== 'undefined' && (window as any).ktt10) {
         initChatbot();
@@ -124,7 +132,6 @@ const Footer = () => {
       }
     }, 100);
 
-    // Cleanup interval after 10 seconds
     const timeout = setTimeout(() => {
       clearInterval(checkInterval);
     }, 10000);
@@ -141,7 +148,7 @@ const Footer = () => {
         <div className="pt-10 pb-8">
           <div className="container mx-auto px-4">
             <div className="text-center py-8">
-              <p className="text-gray-400">Уншиж байна...</p>
+              <p className="text-gray-400">{t('footerLoading')}</p>
             </div>
           </div>
         </div>
@@ -154,41 +161,37 @@ const Footer = () => {
       <div className="pt-10 pb-8">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 mb-8">
-            {/* Company Info */}
             <div className="lg:col-span-2">
               <div className="flex items-center space-x-3 mb-4">
-                <img 
-                  src={footerData.logoUrl || "/logotsas.png"} 
-                  alt={`${footerData.companyName} Logo`} 
-                  width={40} 
-                  height={40} 
+                <img
+                  src={footerData.logoUrl || '/logotsas.png'}
+                  alt={`${footerData.companyName} Logo`}
+                  width={40}
+                  height={40}
                   className="rounded-lg"
                 />
                 <div>
-                  <h3 className="text-xl font-bold text-white">
-                    {footerData.companyName}
-                  </h3>
+                  <h3 className="text-xl font-bold text-white">{footerData.companyName}</h3>
                   {footerData.companySuffix && (
                     <p className="text-gray-400 text-xs">{footerData.companySuffix}</p>
                   )}
                 </div>
               </div>
-              
+
               {footerData.description && (
                 <p className="text-gray-300 text-sm leading-relaxed mb-4 max-w-md">
-                  {footerData.description}
+                  {useFallback ? t('footerDefaultDescription') : footerData.description}
                 </p>
               )}
-              
-              {/* Social Links */}
+
               {footerData.socialLinks && footerData.socialLinks.length > 0 && (
                 <div className="flex space-x-3">
                   {footerData.socialLinks.map((social, index) => (
                     <a
                       key={index}
-                      href={social.url || "#"}
+                      href={social.url || '#'}
                       className="w-8 h-8 bg-gray-800 hover:bg-gray-700 rounded flex items-center justify-center transition-colors"
-                      aria-label={social.name || "Social"}
+                      aria-label={social.name || 'Social'}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
@@ -199,32 +202,28 @@ const Footer = () => {
               )}
             </div>
 
-            {/* Quick Links */}
             {footerData.quickLinks && footerData.quickLinks.length > 0 && (
               <div>
-                <h4 className="text-sm font-bold mb-4 text-white">
-                  Холбоос
-                </h4>
+                <h4 className="text-sm font-bold mb-4 text-white">{t('footerLinksTitle')}</h4>
                 <ul className="space-y-2">
-                  {footerData.quickLinks.map((link, index) => (
-                    <li key={index}>
-                      <a 
-                        href={link.url || "#"} 
-                        className="text-gray-400 hover:text-white text-sm transition-colors"
-                      >
-                        {link.label}
-                      </a>
-                    </li>
-                  ))}
+                  {(useFallback ? getDefaultFooterData(t).quickLinks : footerData.quickLinks).map(
+                    (link, index) => (
+                      <li key={index}>
+                        <a
+                          href={link.url || '#'}
+                          className="text-gray-400 hover:text-white text-sm transition-colors"
+                        >
+                          {link.label}
+                        </a>
+                      </li>
+                    )
+                  )}
                 </ul>
               </div>
             )}
 
-            {/* Contact Info */}
             <div>
-              <h4 className="text-sm font-bold mb-4 text-white">
-                Холбоо Барих
-              </h4>
+              <h4 className="text-sm font-bold mb-4 text-white">{t('footerContactTitle')}</h4>
               <ul className="space-y-3">
                 {footerData.phone && (
                   <li className="flex items-start space-x-2">
@@ -234,12 +233,12 @@ const Footer = () => {
                       </svg>
                     </div>
                     <div>
-                      <div className="text-gray-400 text-xs">Утас</div>
+                      <div className="text-gray-400 text-xs">{t('footerPhoneLabel')}</div>
                       <div className="text-white text-sm">{footerData.phone}</div>
                     </div>
                   </li>
                 )}
-                
+
                 {footerData.email && (
                   <li className="flex items-start space-x-2">
                     <div className="w-6 h-6 bg-gray-800 rounded flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -248,12 +247,12 @@ const Footer = () => {
                       </svg>
                     </div>
                     <div>
-                      <div className="text-gray-400 text-xs">Имэйл</div>
+                      <div className="text-gray-400 text-xs">{t('footerEmailLabel')}</div>
                       <div className="text-white text-sm">{footerData.email}</div>
                     </div>
                   </li>
                 )}
-                
+
                 {footerData.address && (
                   <li className="flex items-start space-x-2">
                     <div className="w-6 h-6 bg-gray-800 rounded flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -263,7 +262,7 @@ const Footer = () => {
                       </svg>
                     </div>
                     <div>
-                      <div className="text-gray-400 text-xs">Хаяг</div>
+                      <div className="text-gray-400 text-xs">{t('footerAddressLabel')}</div>
                       <div className="text-white text-sm">{footerData.address}</div>
                     </div>
                   </li>
@@ -274,7 +273,6 @@ const Footer = () => {
         </div>
       </div>
 
-      {/* Bottom Bar */}
       <div className="border-t border-gray-800 pt-2 pb-2">
         <div className="container mx-auto px-4 py-2">
           <div className="flex flex-col lg:flex-row items-center justify-between gap-1 lg:gap-0">
@@ -283,34 +281,31 @@ const Footer = () => {
                 {footerData.copyrightText || `© ${new Date().getFullYear()} ${footerData.companyName}`}
               </p>
             </div>
-            
+
             {footerData.footerLinks && footerData.footerLinks.length > 0 && (
               <div className="flex flex-wrap justify-center lg:justify-end gap-2 text-xs">
-                {footerData.footerLinks.map((link, index) => (
-                  <a 
-                    key={index}
-                    href={link.url || "#"} 
-                    className="text-gray-400 hover:text-white"
-                  >
-                    {link.label}
-                  </a>
-                ))}
+                {(useFallback ? getDefaultFooterData(t).footerLinks : footerData.footerLinks).map(
+                  (link, index) => (
+                    <a key={index} href={link.url || '#'} className="text-gray-400 hover:text-white">
+                      {link.label}
+                    </a>
+                  )
+                )}
               </div>
             )}
           </div>
         </div>
       </div>
-      
-      {/* Chatbot Scripts */}
+
       <Script
         src="https://chatbot.mongolbot.net/webchat/plugin.js?v=6"
         strategy="lazyOnload"
         onLoad={() => {
           if (typeof window !== 'undefined' && (window as any).ktt10) {
             (window as any).ktt10.setup({
-              id: "KT6JpkeiKo4dJU",
-              accountId: "1800667",
-              color: "#006dff"
+              id: 'KT6JpkeiKo4dJU',
+              accountId: '1800667',
+              color: '#006dff',
             });
           }
         }}
