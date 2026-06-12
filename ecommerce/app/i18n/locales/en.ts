@@ -1,0 +1,36 @@
+import { TranslationKeys } from '../types';
+
+const en: TranslationKeys = {
+  searchPlaceholder: 'Search products...',
+  googleAccount: 'Google account',
+  myProfile: 'My profile',
+  myOrders: 'My orders',
+  paymentMethods: 'Payment methods',
+  settings: 'Settings',
+  logout: 'Log out',
+  allCategories: 'All categories',
+  category: 'Categories',
+  loadingCategories: 'Loading categories...',
+  allProducts: 'All products',
+  close: 'Close',
+  all: 'All',
+  login: 'Log in',
+  welcome: 'Welcome back',
+  googleLoginError: 'Google sign-in failed',
+  loginSuccess: 'Signed in successfully',
+  loginError: 'Sign-in failed. Please check your email/phone and password.',
+  googleLoggingIn: 'Signing in with Google...',
+  googleLogin: 'Continue with Google',
+  orEmailPhone: 'Or email / phone',
+  emailOrPhone: 'Email or phone number',
+  emailPlaceholder: 'email@example.com or 99112233',
+  password: 'Password',
+  forgotPassword: 'Forgot password?',
+  passwordPlaceholder: 'Enter your password',
+  loggingIn: 'Signing in...',
+  newUser: 'New here?',
+  register: 'Create account',
+  language: 'Language',
+};
+
+export default en;

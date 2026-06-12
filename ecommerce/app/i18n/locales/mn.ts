@@ -1,0 +1,36 @@
+import { TranslationKeys } from '../types';
+
+const mn: TranslationKeys = {
+  searchPlaceholder: 'Бараа хайх...',
+  googleAccount: 'Google хаяг',
+  myProfile: 'Миний профайл',
+  myOrders: 'Миний захиалгууд',
+  paymentMethods: 'Төлбөрийн хэрэгсэл',
+  settings: 'Тохиргоо',
+  logout: 'Гарах',
+  allCategories: 'Бүх Ангилал',
+  category: 'Ангилал',
+  loadingCategories: 'Ангилал ачаалж байна...',
+  allProducts: 'Бүх бараа',
+  close: 'Хаах',
+  all: 'Бүгд',
+  login: 'Нэвтрэх',
+  welcome: 'Тавтай морилно уу',
+  googleLoginError: 'Google нэвтрэхэд алдаа гарлаа',
+  loginSuccess: 'амжилттай нэвтэрлээ',
+  loginError: 'Нэвтрэхэд алдаа гарлаа. Та имэйл/утас болон нууц үгээ шалгана уу.',
+  googleLoggingIn: 'Google нэвтэрч байна...',
+  googleLogin: 'Google хаягаар нэвтрэх',
+  orEmailPhone: 'Эсвэл имэйл/утас',
+  emailOrPhone: 'Имэйл хаяг эсвэл утасны дугаар',
+  emailPlaceholder: 'имэйл@жишээ.com эсвэл 99112233',
+  password: 'Нууц үг',
+  forgotPassword: 'Нууц үгээ мартсан уу?',
+  passwordPlaceholder: 'Нууц үгээ оруулна уу',
+  loggingIn: 'Нэвтэрч байна...',
+  newUser: 'Шинэ хэрэглэгч үү?',
+  register: 'Бүртгүүлэх',
+  language: 'Хэл',
+};
+
+export default mn;

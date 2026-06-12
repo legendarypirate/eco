@@ -1,0 +1,36 @@
+import { TranslationKeys } from '../types';
+
+const kr: TranslationKeys = {
+  searchPlaceholder: '상품 검색...',
+  googleAccount: 'Google 계정',
+  myProfile: '내 프로필',
+  myOrders: '내 주문',
+  paymentMethods: '결제 수단',
+  settings: '설정',
+  logout: '로그아웃',
+  allCategories: '전체 카테고리',
+  category: '카테고리',
+  loadingCategories: '카테고리 불러오는 중...',
+  allProducts: '전체 상품',
+  close: '닫기',
+  all: '전체',
+  login: '로그인',
+  welcome: '환영합니다',
+  googleLoginError: 'Google 로그인에 실패했습니다',
+  loginSuccess: '로그인되었습니다',
+  loginError: '로그인에 실패했습니다. 이메일/전화번호와 비밀번호를 확인해 주세요.',
+  googleLoggingIn: 'Google로 로그인 중...',
+  googleLogin: 'Google로 계속하기',
+  orEmailPhone: '또는 이메일/전화',
+  emailOrPhone: '이메일 또는 전화번호',
+  emailPlaceholder: 'email@example.com 또는 99112233',
+  password: '비밀번호',
+  forgotPassword: '비밀번호를 잊으셨나요?',
+  passwordPlaceholder: '비밀번호를 입력하세요',
+  loggingIn: '로그인 중...',
+  newUser: '처음이신가요?',
+  register: '회원가입',
+  language: '언어',
+};
+
+export default kr;

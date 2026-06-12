@@ -4,6 +4,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { CartProvider } from "./context/CartContext";
 import { AuthProvider } from './context/AuthContext';
+import { LanguageProvider } from './context/LanguageContext';
 import ReOrderHandler from './components/ReOrderHandler';
 import CrowSetup from "./components/CrowSetup";
 
@@ -30,15 +31,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="mn">
       <body className={inter.className}>
-        <AuthProvider>
-          <CartProvider>
-            <ReOrderHandler />
-            <CrowSetup />
-            {children}
-          </CartProvider>
-        </AuthProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <CartProvider>
+              <ReOrderHandler />
+              <CrowSetup />
+              {children}
+            </CartProvider>
+          </AuthProvider>
+        </LanguageProvider>
       </body>
     </html>
   );

@@ -1,0 +1,36 @@
+import { TranslationKeys } from '../types';
+
+const cn: TranslationKeys = {
+  searchPlaceholder: '搜索商品...',
+  googleAccount: 'Google 账号',
+  myProfile: '我的资料',
+  myOrders: '我的订单',
+  paymentMethods: '支付方式',
+  settings: '设置',
+  logout: '退出登录',
+  allCategories: '全部分类',
+  category: '分类',
+  loadingCategories: '正在加载分类...',
+  allProducts: '全部商品',
+  close: '关闭',
+  all: '全部',
+  login: '登录',
+  welcome: '欢迎回来',
+  googleLoginError: 'Google 登录失败',
+  loginSuccess: '登录成功',
+  loginError: '登录失败，请检查邮箱/手机号和密码。',
+  googleLoggingIn: '正在通过 Google 登录...',
+  googleLogin: '使用 Google 登录',
+  orEmailPhone: '或使用邮箱/手机',
+  emailOrPhone: '邮箱或手机号',
+  emailPlaceholder: 'email@example.com 或 99112233',
+  password: '密码',
+  forgotPassword: '忘记密码？',
+  passwordPlaceholder: '请输入密码',
+  loggingIn: '正在登录...',
+  newUser: '新用户？',
+  register: '注册',
+  language: '语言',
+};
+
+export default cn;

@@ -26,6 +26,8 @@ import { useRouter } from 'next/navigation';
 import { Category as ApiCategory } from '../lib/types';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import LanguageSwitcher from './LanguageSwitcher';
 
 interface Category {
   id: string;
@@ -52,6 +54,7 @@ const Header = () => {
   
   const { user, isAuthenticated, login, loginWithGoogle, logout } = useAuth();
   const { cartCount, wishlistCount } = useCart();
+  const { t } = useLanguage();
 
   // Login modal states
   const [showPassword, setShowPassword] = useState(false);
@@ -198,7 +201,7 @@ const Header = () => {
         setIsLoginOpen(false);
         setIsGoogleLoading(false);
       } else if (event.data.type === 'google_auth_error') {
-        setLoginError(event.data.message || 'Google нэвтрэхэд алдаа гарлаа');
+        setLoginError(event.data.message || t('googleLoginError'));
         setIsGoogleLoading(false);
       }
     };
@@ -294,12 +297,12 @@ const Header = () => {
       }
       
       await login(credentials);
-      showToast('амжилттай нэвтэрлээ', 'success');
+      showToast(t('loginSuccess'), 'success');
       setIsLoginOpen(false);
       setEmail('');
       setPassword('');
     } catch (error: any) {
-      setLoginError(error.message || 'Нэвтрэхэд алдаа гарлаа. Та имэйл/утас болон нууц үгээ шалгана уу.');
+      setLoginError(error.message || t('loginError'));
     } finally {
       setIsLoading(false);
     }
@@ -314,14 +317,14 @@ const Header = () => {
       const result = await loginWithGoogle();
       
       if (result.success) {
-        showToast('амжилттай нэвтэрлээ', 'success');
+        showToast(t('loginSuccess'), 'success');
         setIsLoginOpen(false);
       } else {
-        setLoginError('Google нэвтрэхэд алдаа гарлаа');
+        setLoginError(t('googleLoginError'));
       }
     } catch (error: any) {
       console.error('Google login error:', error);
-      setLoginError(error.message || 'Google нэвтрэхэд алдаа гарлаа');
+      setLoginError(error.message || t('googleLoginError'));
     } finally {
       setIsGoogleLoading(false);
     }
@@ -415,7 +418,7 @@ const Header = () => {
                 <form onSubmit={handleSearch} className="relative">
                   <input
                     type="text"
-                    placeholder="Бараа хайх..."
+                    placeholder={t('searchPlaceholder')}
                     className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900/20 focus:border-gray-300 transition-all duration-200"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -431,8 +434,7 @@ const Header = () => {
 
               {/* Action Icons */}
               <div className="flex items-center space-x-4">
-                {/* Notifications (Optional) */}
-               
+                <LanguageSwitcher />
 
                 {/* Wishlist */}
                 <button 
@@ -485,7 +487,7 @@ const Header = () => {
                             {user?.provider === 'google' && (
                               <div className="flex items-center gap-1">
                                 <Chrome className="w-3 h-3 text-red-500" />
-                                <span className="text-xs text-gray-500">Google хаяг</span>
+                                <span className="text-xs text-gray-500">{t('googleAccount')}</span>
                               </div>
                             )}
                           </div>
@@ -500,7 +502,7 @@ const Header = () => {
                           className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
                         >
                           <User className="w-4 h-4" />
-                          <span>Миний профайл</span>
+                          <span>{t('myProfile')}</span>
                         </button>
                         <button
                           onClick={() => {
@@ -510,21 +512,21 @@ const Header = () => {
                           className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
                         >
                           <Package className="w-4 h-4" />
-                          <span>Миний захиалгууд</span>
+                          <span>{t('myOrders')}</span>
                         </button>
                         <button
                           disabled
                           className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm text-gray-400 cursor-not-allowed rounded-lg opacity-60"
                         >
                           <CreditCard className="w-4 h-4" />
-                          <span>Төлбөрийн хэрэгсэл</span>
+                          <span>{t('paymentMethods')}</span>
                         </button>
                         <button
                           disabled
                           className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm text-gray-400 cursor-not-allowed rounded-lg opacity-60"
                         >
                           <Settings className="w-4 h-4" />
-                          <span>Тохиргоо</span>
+                          <span>{t('settings')}</span>
                         </button>
                         <div className="border-t border-gray-100 my-2"></div>
                         <button
@@ -532,7 +534,7 @@ const Header = () => {
                           className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         >
                           <LogOut className="w-4 h-4" />
-                          <span>Гарах</span>
+                          <span>{t('logout')}</span>
                         </button>
                       </div>
                     </div>
@@ -569,7 +571,7 @@ const Header = () => {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                   </svg>
-                  <span>Бүх Ангилал</span>
+                  <span>{t('allCategories')}</span>
                   <ChevronDown className={`w-4 h-4 transition-transform ${isCategoryMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
 
@@ -577,11 +579,11 @@ const Header = () => {
                 {isCategoryMenuOpen && (
                   <div className="absolute top-full left-0 mt-2 w-72 bg-white border border-gray-200 shadow-xl rounded-xl z-50 animate-in fade-in slide-in-from-top-2">
                     <div className="p-4">
-                      <h3 className="text-sm font-semibold text-gray-900 mb-3">Ангилал</h3>
+                      <h3 className="text-sm font-semibold text-gray-900 mb-3">{t('category')}</h3>
                       {isLoadingCategories ? (
                         <div className="py-8 text-center">
                           <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
-                          <p className="mt-2 text-sm text-gray-500">Ангилал ачаалж байна...</p>
+                          <p className="mt-2 text-sm text-gray-500">{t('loadingCategories')}</p>
                         </div>
                       ) : (
                         <div className="space-y-1 max-h-96 overflow-y-auto pr-2">
@@ -595,7 +597,7 @@ const Header = () => {
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center group-hover:from-gray-300 group-hover:to-gray-400 transition-all">
                               <span className="text-sm font-medium">📦</span>
                             </div>
-                            <span className="font-medium">Бүх бараа</span>
+                            <span className="font-medium">{t('allProducts')}</span>
                             <ChevronRight className="w-4 h-4 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
                           </button>
                           
@@ -621,7 +623,7 @@ const Header = () => {
                           onClick={() => setIsCategoryMenuOpen(false)}
                         >
                           <X className="w-4 h-4 mr-2" />
-                          Хаах
+                          {t('close')}
                         </button>
                       </div>
                     </div>
@@ -653,7 +655,7 @@ const Header = () => {
                         <span className="text-[10px] font-medium">📦</span>
                       </div>
                       <span className="text-[10px] font-medium truncate max-w-[180px]">
-                        Бүгд
+                        {t('all')}
                       </span>
                     </button>
                     {categories.slice(0, 6).map((category) => (
@@ -751,8 +753,8 @@ const Header = () => {
                   <div className="w-12 h-12 bg-gradient-to-br from-gray-900 to-black rounded-xl flex items-center justify-center mx-auto mb-3">
                     <User className="w-6 h-6 text-white" />
                   </div>
-                  <h2 className="text-xl font-bold text-gray-900 mb-1">Нэвтрэх</h2>
-                  <p className="text-sm text-gray-600">Тавтай морилно уу</p>
+                  <h2 className="text-xl font-bold text-gray-900 mb-1">{t('login')}</h2>
+                  <p className="text-sm text-gray-600">{t('welcome')}</p>
                 </div>
 
                 {/* Error Message */}
@@ -776,14 +778,14 @@ const Header = () => {
                       <>
                         <div className="w-5 h-5 border-2 border-red-500/30 border-t-red-500 rounded-full animate-spin"></div>
                         <span className="text-sm text-gray-700 font-medium">
-                          Google нэвтэрч байна...
+                          {t('googleLoggingIn')}
                         </span>
                       </>
                     ) : (
                       <>
                         <Chrome className="w-5 h-5 text-red-500" />
                         <span className="text-sm text-gray-700 font-medium">
-                          Google хаягаар нэвтрэх
+                          {t('googleLogin')}
                         </span>
                       </>
                     )}
@@ -796,7 +798,7 @@ const Header = () => {
                     <div className="w-full border-t border-gray-200"></div>
                   </div>
                   <div className="relative flex justify-center text-sm">
-                    <span className="px-3 bg-white text-gray-500">Эсвэл имэйл/утас</span>
+                    <span className="px-3 bg-white text-gray-500">{t('orEmailPhone')}</span>
                   </div>
                 </div>
 
@@ -804,7 +806,7 @@ const Header = () => {
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1.5">
-                      Имэйл хаяг эсвэл утасны дугаар
+                      {t('emailOrPhone')}
                     </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -815,7 +817,7 @@ const Header = () => {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         className="w-full pl-10 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900/20 focus:border-gray-300 text-sm transition-all"
-                        placeholder="имэйл@жишээ.com эсвэл 99112233"
+                        placeholder={t('emailPlaceholder')}
                         required
                       />
                     </div>
@@ -824,13 +826,13 @@ const Header = () => {
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="block text-xs font-medium text-gray-700">
-                        Нууц үг
+                        {t('password')}
                       </label>
                       <button
                         type="button"
                         className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                       >
-                        Нууц үгээ мартсан уу?
+                        {t('forgotPassword')}
                       </button>
                     </div>
                     <div className="relative">
@@ -842,7 +844,7 @@ const Header = () => {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900/20 focus:border-gray-300 text-sm transition-all"
-                        placeholder="Нууц үгээ оруулна уу"
+                        placeholder={t('passwordPlaceholder')}
                         required
                       />
                       <button
@@ -867,10 +869,10 @@ const Header = () => {
                     {isLoading ? (
                       <span className="flex items-center justify-center gap-2">
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                        Нэвтэрч байна...
+                        {t('loggingIn')}
                       </span>
                     ) : (
-                      'Нэвтрэх'
+                      t('login')
                     )}
                   </button>
                 </form>
@@ -878,12 +880,12 @@ const Header = () => {
                 {/* Footer */}
                 <div className="mt-6 text-center">
                   <p className="text-sm text-gray-600">
-                    Шинэ хэрэглэгч үү?{' '}
+                    {t('newUser')}{' '}
                     <button
                       onClick={handleRegisterClick}
                       className="text-blue-600 hover:text-blue-800 font-medium underline underline-offset-2"
                     >
-                      Бүртгүүлэх
+                      {t('register')}
                     </button>
                   </p>
                 </div>

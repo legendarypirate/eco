@@ -1,0 +1,36 @@
+import { TranslationKeys } from '../types';
+
+const jp: TranslationKeys = {
+  searchPlaceholder: '商品を検索...',
+  googleAccount: 'Google アカウント',
+  myProfile: 'マイプロフィール',
+  myOrders: '注文履歴',
+  paymentMethods: '支払い方法',
+  settings: '設定',
+  logout: 'ログアウト',
+  allCategories: 'すべてのカテゴリ',
+  category: 'カテゴリ',
+  loadingCategories: 'カテゴリを読み込み中...',
+  allProducts: 'すべての商品',
+  close: '閉じる',
+  all: 'すべて',
+  login: 'ログイン',
+  welcome: 'ようこそ',
+  googleLoginError: 'Google ログインに失敗しました',
+  loginSuccess: 'ログインしました',
+  loginError: 'ログインに失敗しました。メール/電話番号とパスワードを確認してください。',
+  googleLoggingIn: 'Google でログイン中...',
+  googleLogin: 'Google で続ける',
+  orEmailPhone: 'またはメール/電話',
+  emailOrPhone: 'メールまたは電話番号',
+  emailPlaceholder: 'email@example.com または 99112233',
+  password: 'パスワード',
+  forgotPassword: 'パスワードをお忘れですか？',
+  passwordPlaceholder: 'パスワードを入力',
+  loggingIn: 'ログイン中...',
+  newUser: '初めての方？',
+  register: '新規登録',
+  language: '言語',
+};
+
+export default jp;
